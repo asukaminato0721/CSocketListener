@@ -58,11 +58,15 @@ void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     buf->len = suggested_size;
 }
 
-#define HASH_TABLE_SIZE 294967295
+#define HASH_TABLE_SIZE 494967
+#define HASH_SMALL_TABLE_SIZE 124856
 
-unsigned int hash_int_table[HASH_TABLE_SIZE];
+unsigned long hash_int_table_source[HASH_TABLE_SIZE];
+int hash_int_table[HASH_TABLE_SIZE];
+int hash_int_small_table[HASH_SMALL_TABLE_SIZE];
 
-unsigned int hash_int(unsigned int key){
+
+unsigned long hash_int(unsigned long key, unsigned long size){
 	/* Robert Jenkins' 32 bit Mix Function */
 	key += (key << 12);
 	key ^= (key >> 22);
@@ -74,17 +78,77 @@ unsigned int hash_int(unsigned int key){
 	key ^= (key >> 12);
 
 	/* Knuth's Multiplicative Method */
-	key = (key >> 3) * 2654435761;
+	key = ((key) >> 3) * 2654435761;
 
-	return key % HASH_TABLE_SIZE;
+	return key % size;
+}
+
+int hash_table_get(unsigned long key) {
+    unsigned long hash = hash_int(key, HASH_TABLE_SIZE);
+    if (hash_int_table[hash] == -2) {
+        hash = hash_int(key * 2654435761, HASH_SMALL_TABLE_SIZE);
+        return hash_int_small_table[hash];
+    }
+
+    return hash_int_table[hash];
+}
+
+void hash_table_init() {
+    for (int i=0; i<HASH_TABLE_SIZE; ++i)
+        hash_int_table[HASH_TABLE_SIZE] = -1;
+
+    for (int i=0; i<HASH_SMALL_TABLE_SIZE; ++i)
+        hash_int_small_table[HASH_SMALL_TABLE_SIZE] = -1;        
+}
+
+void hash_table_deoccupy(unsigned long key) {
+    unsigned long hash = hash_int(key, HASH_TABLE_SIZE);
+    if (hash_int_table[hash] == -2) {
+        hash = hash_int(key * 2654435761, HASH_SMALL_TABLE_SIZE);
+        hash_int_small_table[hash] = -1;
+        return;
+    } 
+
+    hash_int_table[hash] = -1;
+}
+
+void hash_table_occupy(unsigned long key, int value) {
+    unsigned long hash = hash_int(key, HASH_TABLE_SIZE);
+    unsigned long original = hash_int(key, HASH_TABLE_SIZE);
+
+    if (hash_int_table[hash] != -1) {
+        printf("hash collizion! Shit!\n");
+        printf("hash collizion! sHit!\n");
+        printf("hash collizion! shIt!\n");
+        printf("hash collizion! shiT!\n");
+        printf("ops...................\n");
+        
+
+        printf("moving the old one to a new table\n");
+        unsigned long newHash = hash_int(hash_int_table_source[hash] * 2654435761, HASH_SMALL_TABLE_SIZE);
+        hash_int_small_table[newHash] = hash_int_table[hash];
+
+        hash = hash_int(key * 2654435761, HASH_SMALL_TABLE_SIZE);
+        if (hash == newHash || hash_int_small_table[hash] > -1) {
+            printf("Sorry. it is again the same. Please, change the hash function ;()\n");
+            exit(-1);
+        }
+
+        hash_int_small_table[newHash] = value;     
+        hash_int_table[original] = -2;
+
+        return;
+    }
+
+    hash_int_table[hash] = value;
 }
 
 int fetchClientId(uv_stream_t *client) {
-    return hash_int_table[hash_int((unsigned int)client)];
+    return hash_table_get((unsigned long)client);
 }
 
 int fetchStreamId(uv_stream_t *s) {
-    return hash_int_table[hash_int((unsigned int)s)];
+    return hash_table_get((unsigned long)s);
 }
 
 WolframIOLibrary_Functions ioLibrary;
@@ -177,6 +241,7 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
         if (uv_is_closing((uv_handle_t*) clients[uid].stream) == 0)
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;   
+        hash_table_deoccupy((unsigned long)clients[uid].stream);  
 
         //printf("we closed socket: %d ;)))\n", fetchClientId(client));
         //clients[fetchClientId(client)].state = 2;
@@ -228,7 +293,7 @@ void on_new_connection(uv_stream_t *server, int status) {
     uv_tcp_t *c = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
 
     
-    hash_int_table[hash_int((uv_stream_t*)c)] = nclients;
+    hash_table_occupy((uv_stream_t*)c, nclients);
 
     clients[nclients].stream = (uv_stream_t*)c;
     clients[nclients].parent = (uv_stream_t*)server;
@@ -245,6 +310,7 @@ void on_new_connection(uv_stream_t *server, int status) {
         clients[nclients].state = -1;
         if (uv_is_closing((uv_handle_t*) c) == 0)
             uv_close((uv_handle_t*) c, NULL);
+        hash_table_deoccupy((unsigned long)c);  
     }
 }
 
@@ -282,7 +348,7 @@ DLLEXPORT int create_server(WolframLibraryData libData, mint Argc, MArgument *Ar
 
     findEmptyServersSlot();
 
-    hash_int_table[hash_int((uv_stream_t*)s)] = nservers;
+    hash_table_occupy((uv_stream_t*)s, nservers);
     servers[nservers].stream = (uv_stream_t*)s;
     servers[nservers].id = nservers;
     servers[nservers].state = 0;
@@ -329,7 +395,8 @@ void echo_write(uv_write_t *req, int status) {
         printf("making %d closed manually!\n", uid);
         if (uv_is_closing((uv_handle_t*) clients[uid].stream) == 0)
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
-        clients[uid].state = -1;        
+        clients[uid].state = -1;
+        hash_table_deoccupy((unsigned long)clients[uid].stream);       
     }
 
     printf("free write req !\n");
@@ -397,6 +464,7 @@ DLLEXPORT int socket_write(WolframLibraryData libData, mint Argc, MArgument *Arg
         printf("Client %d is not writtable anymore!\n", clientId);
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
             uv_close((uv_handle_t*) clients[clientId].stream, NULL);
+        hash_table_deoccupy((unsigned long)clients[clientId].stream);  
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
         return LIBRARY_NO_ERROR;
@@ -438,6 +506,7 @@ DLLEXPORT int socket_write_string(WolframLibraryData libData, mint Argc, MArgume
         printf("Client %d i now writtable anymore!\n", clientId);
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
             uv_close((uv_handle_t*) clients[clientId].stream, NULL);
+        hash_table_deoccupy((unsigned long)clients[clientId].stream);  
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
         return LIBRARY_NO_ERROR;
@@ -467,7 +536,8 @@ DLLEXPORT int close_socket(WolframLibraryData libData, mint Argc, MArgument *Arg
     printf("Client %d was closed by Wolfram!\n", clientId);
     if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
         uv_close((uv_handle_t*) clients[clientId].stream, NULL);
-    clients[clientId].state = -1;    
+    clients[clientId].state = -1;  
+    hash_table_deoccupy((unsigned long)clients[clientId].stream);    
     
     MArgument_setInteger(Res, 0);
     return LIBRARY_NO_ERROR; 
