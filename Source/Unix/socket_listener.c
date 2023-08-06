@@ -57,9 +57,9 @@ void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     buf->len = suggested_size;
 }
 
-#define HASH_TABLE_SIZE 65536
+#define HASH_TABLE_SIZE 294967295
 
-int hash_int_table[HASH_TABLE_SIZE];
+unsigned int hash_int_table[HASH_TABLE_SIZE];
 
 unsigned int hash_int(unsigned int key){
 	/* Robert Jenkins' 32 bit Mix Function */
@@ -117,6 +117,10 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     ioLibrary = libData->ioLibraryFunctions;
     numericLibrary = libData->numericarrayLibraryFunctions;
 
+    for (int i=0; i<HASH_TABLE_SIZE; ++i) {
+        hash_int_table[i] = -1;
+    }
+
     return 0;
 }
 
@@ -172,6 +176,7 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
         if (uv_is_closing((uv_handle_t*) clients[uid].stream) == 0)
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;   
+
         //printf("we closed socket: %d ;)))\n", fetchClientId(client));
         //clients[fetchClientId(client)].state = 2;
         //mb one can notify mathematica about it
@@ -309,7 +314,7 @@ DLLEXPORT int create_server(WolframLibraryData libData, mint Argc, MArgument *Ar
 typedef struct uv_write_q_st {
     uv_write_t* req; 
     uv_stream_t* stream; 
-    uv_buf_t* buf
+    uv_buf_t* buf;
 } uv_write_q; 
 
 volatile uv_write_q uv_write_que[128];
