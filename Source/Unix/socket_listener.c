@@ -237,7 +237,7 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
         //uv_close((uv_handle_t*) client, NULL);
         int uid = fetchClientId(client);
         printf("writeerror !\n");
-        printf("making %d closed manually!\n", uid);
+        printf("making %d closed by the reading thread!\n", uid);
         if (uv_is_closing((uv_handle_t*) clients[uid].stream) == 0)
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;   
@@ -416,33 +416,63 @@ void echo_write(uv_write_t *req, int status) {
     }*/
 }
 
+int write_fifo_ptr = -1;
+int close_fifo_ptr = -1;
+
+typedef struct {
+    uv_write_t* req;
+    uv_stream_t* stream;
+    uv_buf_t* buf;
+    uv_handle_t* handle;
+} write_fifo_t;
+
+write_fifo_t write_fifo[1024];
+write_fifo_t close_fifo[64];
+
+void async_cb_write(uv_async_t* async, int status) {
+  printf("async_cb\n");
+
+  while (write_fifo_ptr >= 0) {
+    uv_write(write_fifo[write_fifo_ptr].req, write_fifo[write_fifo_ptr].stream, write_fifo[write_fifo_ptr].buf, 1, echo_write);
+    write_fifo_ptr--;
+  }
+
+  uv_close((uv_handle_t*) async, NULL);
+}
+
+void async_cb_close(uv_async_t* async, int status) {
+  printf("async_cb_close\n");
+
+  while (close_fifo_ptr >= 0) {
+    uv_close((uv_handle_t*)close_fifo[close_fifo_ptr].handle, NULL);
+    close_fifo_ptr--;
+  }
+
+  uv_close((uv_handle_t*) async, NULL);
+}
+
+
 
 int uv_write_push(uv_write_t* req, uv_stream_t* stream, uv_buf_t* buf) {
-    return uv_write(req, stream, buf, 1, echo_write);
+    uv_async_t *message = (uv_async_t*)malloc(sizeof(uv_async_t));
 
-    /*printf("UV_WRITE_PUSH!\n");
+    ++write_fifo_ptr;
+    write_fifo[write_fifo_ptr].req = req;
+    write_fifo[write_fifo_ptr].stream = stream;
+    write_fifo[write_fifo_ptr].buf = buf;
 
-    if (uv_write_que_ptr == -1) {
-        uv_write_que_ptr = 0;
-        printf("direct writting!\n");
-     
-        return uv_write(req, stream, buf, 1, echo_write);
-    }
+    int r = uv_async_init(loop, message, async_cb_write);
+    uv_async_send(message);
+}
 
-    printf("BUSY. putting in a query at %d\n", uv_write_que_ptr);
+void uv_close_push(uv_handle_t* handle, void* m) {
+    uv_async_t *message = (uv_async_t*)malloc(sizeof(uv_async_t));
 
-    uv_write_que[uv_write_que_ptr].req = req;
-    uv_write_que[uv_write_que_ptr].stream = stream;
-    uv_write_que[uv_write_que_ptr].buf = buf;
+    ++close_fifo_ptr;
+    close_fifo[close_fifo_ptr].handle = handle;
 
-    ++uv_write_que_ptr;
-
-    if (uv_write_que_ptr > 127) {
-        printf("BOOM! Que OVERLOAD. NOT ENOUGH FIFO");
-        exit(-1);
-    }
-    
-    return 2;*/
+    int r = uv_async_init(loop, message, async_cb_close);
+    uv_async_send(message);    
 }
 
 
@@ -463,7 +493,7 @@ DLLEXPORT int socket_write(WolframLibraryData libData, mint Argc, MArgument *Arg
     if (uv_is_writable(clients[clientId].stream) == 0) {
         printf("Client %d is not writtable anymore!\n", clientId);
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
-            uv_close((uv_handle_t*) clients[clientId].stream, NULL);
+            uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
         hash_table_deoccupy((unsigned long)clients[clientId].stream);  
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
@@ -505,7 +535,7 @@ DLLEXPORT int socket_write_string(WolframLibraryData libData, mint Argc, MArgume
     if (uv_is_writable(clients[clientId].stream) == 0) {
         printf("Client %d i now writtable anymore!\n", clientId);
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
-            uv_close((uv_handle_t*) clients[clientId].stream, NULL);
+            uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
         hash_table_deoccupy((unsigned long)clients[clientId].stream);  
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
@@ -535,7 +565,7 @@ DLLEXPORT int close_socket(WolframLibraryData libData, mint Argc, MArgument *Arg
 
     printf("Client %d was closed by Wolfram!\n", clientId);
     if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
-        uv_close((uv_handle_t*) clients[clientId].stream, NULL);
+        uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
     clients[clientId].state = -1;  
     hash_table_deoccupy((unsigned long)clients[clientId].stream);    
     
