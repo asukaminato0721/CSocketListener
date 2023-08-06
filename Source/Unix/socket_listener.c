@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
+#include <stdbool.h>
 
 #include "WolframLibrary.h"
 #include "WolframIOLibraryFunctions.h"
@@ -190,7 +191,7 @@ void findEmptyClientsSlot() {
     nclients++;
     if (nclients == MAXCLIENTS) nclients = 0;
 
-    while(TRUE) {
+    while(true) {
         if (clients[nclients].state == -1) return;
 
         nclients++;
@@ -204,7 +205,7 @@ void findEmptyServersSlot() {
     nservers++;
     if (nservers == 10) nservers = 0;
 
-    while(TRUE) {
+    while(true) {
         if (servers[nservers].state == -1) return;
 
         nservers++;
