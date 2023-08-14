@@ -4,6 +4,8 @@
 LINUXLIVUVPATH = "/home/kirill/Downloads/libuv-1.46.0/build/libuv.so"
 MACOSXLIBUVPATH = "/usr/local/lib/libuv.a"
 
+MACOSXLIBUVINCLUDE = "/usr/local/lib/libuv.a"
+
 Get["CCompilerDriver`"]; 
 
 (*
@@ -13,6 +15,8 @@ $CCompiler={"Compiler"->GenericCCompiler,
  "ShellOutputFunction"->Print}
 
  *)
+
+OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVINCLUDE}, {}]];
 
 OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, {}];
 OSPath = If[$OperatingSystem === "Windows", "Windows", "Unix"];
@@ -46,5 +50,5 @@ Block[{$directory, $libSrc, $libDir},
 
 	Get["CCompilerDriver`"]; 
 
-	CreateLibrary[$libSrc, "socket_listener" , "TargetDirectory" -> $libDir, "Debug"->True, "LinkerOptions"->OSLinker,	"Libraries"->OSLibs]
+	CreateLibrary[$libSrc, "socket_listener" , "TargetDirectory" -> $libDir, "Debug"->True, "LinkerOptions"->OSLinker,	"Libraries"->OSLibs, "IncludeDirectories"->OSIncludes]
 ]; 
