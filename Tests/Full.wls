@@ -4,8 +4,8 @@ PacletInstall["JerryI/LPM"]
 PacletRepositories[{
   Github -> "https://github.com/KirillBelovTest/Objects",
   Github -> "https://github.com/KirillBelovTest/Internal",
-  Github -> "https://github.com/KirillBelovTest/TCPServer",
-  Github -> "https://github.com/KirillBelovTest/HTTPHandler",
+  Github -> "https://github.com/JerryI/TCPServer",
+  Github -> "https://github.com/JerryI/HTTPHandler",
   Github -> "https://github.com/JerryI/WebSocketHandler",
   Github -> "https://github.com/JerryI/wl-wsp"
 }]
@@ -54,7 +54,7 @@ ws = WebSocketHandler[]
 
 ws["MessageHandler", "Evaluate"]  = Function[True] -> evaluate
 
-evaluate[cl: _SocketObject | _CSocketObject, data_ByteArray] := Block[{Global`client = cl},
+evaluate[cl: _SocketObject | _CSocket, data_ByteArray] := Block[{Global`client = cl},
     ToExpression[data//ByteArrayToString];
 ]
 
