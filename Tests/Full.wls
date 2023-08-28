@@ -54,7 +54,7 @@ ws = WebSocketHandler[]
 
 ws["MessageHandler", "Evaluate"]  = Function[True] -> evaluate
 
-evaluate[cl: _SocketObject | _CSocket, data_ByteArray] := Block[{Global`client = cl},
+evaluate[cl: _SocketObject | _CSocketObject, data_ByteArray] := Block[{Global`client = cl},
     ToExpression[data//ByteArrayToString];
 ]
 
