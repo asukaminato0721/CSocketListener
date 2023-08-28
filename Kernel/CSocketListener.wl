@@ -26,8 +26,6 @@ CSocketListener::usage =
 CSocket::usage = 
 "CSocket[socketId] socket representation."; 
 
-CSocketObject::usage = 
-"CSocketObject[socketId] socket representation."; 
 
 (* ::Section:: *)
 (*Private context*)
@@ -40,15 +38,15 @@ Begin["`Private`"];
 (*Implementation*)
 
 
-CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], bytes_ByteArray] := 
+CSocket /: BinaryWrite[CSocket[socketId_Integer], bytes_ByteArray] := 
 If[socketWrite[socketId, bytes, Length[bytes]] === -1, Print["lib writting failed!"]; $Failed, Null]; 
 
 
-CSocketObject /: WriteString[CSocketObject[socketId_Integer], string_String] := 
+CSocket /: WriteString[CSocket[socketId_Integer], string_String] := 
 If[socketWriteString[socketId, string, StringLength[string]] === -1, Print["lib writting failed!"]; $Failed, Null]; 
 
 
-CSocketObject /: Close[CSocketObject[socketId_Integer]] := 
+CSocket /: Close[CSocket[socketId_Integer]] := 
 closeSocket[socketId]; 
 
 
