@@ -202,9 +202,9 @@ void pipeBufData (uv_buf_t buf, uv_stream_t *client) {
 
 	DataStore ds;
 
-    printf("CURRENT ID OF CLIENT: %d\n", clientId);
+    //printf("CURRENT ID OF CLIENT: %d\n", clientId);
 
-    printf("RECEIVED %d BYTES\n", buf.len);
+    //printf("RECEIVED %d BYTES\n", buf.len);
     
     dims[0] = buf.len; 
     numericLibrary->MNumericArray_new(MNumericArray_Type_UBit8, 1, dims, &data); 
@@ -215,7 +215,7 @@ void pipeBufData (uv_buf_t buf, uv_stream_t *client) {
     ioLibrary->DataStore_addInteger(ds, clientId);
     ioLibrary->DataStore_addMNumericArray(ds, data);
 
-    printf("raise async event %d for server %d and client %d\n", asyncObjID, streamId, clientId);
+    //printf("raise async event %d for server %d and client %d\n", asyncObjID, streamId, clientId);
     ioLibrary->raiseAsyncEvent(asyncObjID, "RECEIVED_BYTES", ds);
 }
 
@@ -303,7 +303,7 @@ void on_new_connection(uv_stream_t *server, int status) {
     uv_tcp_init(loop, c);
 
     if (uv_accept(server, (uv_stream_t*) c) == 0) {
-        printf("uv start reading");
+        //printf("uv start reading");
         uv_read_start((uv_stream_t*) c, alloc_buffer, echo_read);
     } else {
         printf("not accepted for %d", nclients);
@@ -399,7 +399,7 @@ void echo_write(uv_write_t *req, int status) {
         hash_table_deoccupy((unsigned long)clients[uid].stream);       
     }
 
-    printf("free write req !\n");
+    //printf("free write req !\n");
     free_write_req(req);
 
     /*uv_write_que_ptr--;
@@ -430,7 +430,7 @@ write_fifo_t write_fifo[1024];
 write_fifo_t close_fifo[64];
 
 void async_cb_write(uv_async_t* async, int status) {
-  printf("async_cb\n");
+  //printf("async_cb\n");
 
   while (write_fifo_ptr >= 0) {
     uv_write(write_fifo[write_fifo_ptr].req, write_fifo[write_fifo_ptr].stream, write_fifo[write_fifo_ptr].buf, 1, echo_write);
@@ -441,7 +441,7 @@ void async_cb_write(uv_async_t* async, int status) {
 }
 
 void async_cb_close(uv_async_t* async, int status) {
-  printf("async_cb_close\n");
+  //printf("async_cb_close\n");
 
   while (close_fifo_ptr >= 0) {
     uv_close((uv_handle_t*)close_fifo[close_fifo_ptr].handle, NULL);
@@ -506,14 +506,14 @@ DLLEXPORT int socket_write(WolframLibraryData libData, mint Argc, MArgument *Arg
     //otherwise Mathematica will free the buffer before it will be sent
     memcpy(bytes, numericLibrary->MNumericArray_getData(MArgument_getMNumericArray(Args[1])), sizeof(char)*bytesLen);
 
-    printf("*** sending stuff.... to socket %d\n", clientId);
+    //printf("*** sending stuff.... to socket %d\n", clientId);
     write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
     req->buf = uv_buf_init(bytes, bytesLen);
 
     int st = uv_write_push((uv_write_t*) req, clients[clientId].stream, &req->buf);
     //int st = uv_write((uv_write_t*) req, clients[clientId].stream, &req->buf, 1, echo_write);
     //ON ERROR send expection to mathematica
-    printf("*** done with %d ***\n", st);
+    //printf("*** done with %d ***\n", st);
 
     MArgument_setInteger(Res, st); 
     return LIBRARY_NO_ERROR; 
@@ -533,7 +533,7 @@ DLLEXPORT int socket_write_string(WolframLibraryData libData, mint Argc, MArgume
     }    
 
     if (uv_is_writable(clients[clientId].stream) == 0) {
-        printf("Client %d i now writtable anymore!\n", clientId);
+        printf("Client %d is not writtable anymore!\n", clientId);
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
             uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
         hash_table_deoccupy((unsigned long)clients[clientId].stream);  
@@ -547,14 +547,14 @@ DLLEXPORT int socket_write_string(WolframLibraryData libData, mint Argc, MArgume
     //otherwise Mathematica will free the buffer before it will be sent
     memcpy(bytes, MArgument_getUTF8String(Args[1]), sizeof(char)*bytesLen);
 
-    printf("*** sending stuff.... to socket %d\n", clientId);
+    //printf("*** sending stuff.... to socket %d\n", clientId);
     write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
     req->buf = uv_buf_init(bytes, bytesLen);
 
     //int st = uv_write((uv_write_t*) req, clients[clientId].stream, &req->buf, 1, echo_write);
     int st = uv_write_push((uv_write_t*) req, clients[clientId].stream, &req->buf);
     //ON ERROR send expection to mathematica
-    printf("*** done with %d ***\n", st);
+    //printf("*** done with %d ***\n", st);
 
     MArgument_setInteger(Res, st); 
     return LIBRARY_NO_ERROR; 
