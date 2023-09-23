@@ -41,6 +41,9 @@
 #endif
 
 #include <stdio.h>
+#include <semaphore.h>
+
+
 
 #include "WolframLibrary.h"
 #include "WolframIOLibraryFunctions.h"
@@ -48,9 +51,9 @@
 
 volatile int emergencyExit = 0;
 
-long sptr = -1;
+sem_t mutex;
 
-volatile int qblock = -1;
+long sptr = -1;
 
 typedef struct {
     SOCKET socket;
@@ -88,25 +91,33 @@ unsigned long hash(unsigned long key) {
 	return key % hashmap_size;
 }
 
+//Push to the writting stack
 void wQueryPush(wQuery_t* q) {
     //randomly start
-    unsigned long init = rand() % wQuery_size;
-
-    for (unsigned long i=init; i<wQuery_size; ++i) {
+    //unsigned long init = rand() % wQuery_size;
+    //sem_wait(&sem);
+    // pthread_mutex_lock(&m);
+    for (unsigned long i=0; i<wQuery_size; ++i) {
         if (wQuery[i] == NULL) {
             wQuery[i] = q;
+            //sem_post(&sem);
+             //pthread_mutex_unlock(&m);
             return;
         }
     }
 
-    for (unsigned long i=init; i>=0; --i) {
+    /*for (unsigned long i=init; i>=0; --i) {
         if (wQuery[i] == NULL) {
             wQuery[i] = q;
+            //sem_post(&sem);
+            //pthread_mutex_unlock(&m);
             return;
         }
-    }    
+    }    */
+    
 }
 
+//Check if something in the writting stack
 int wQueryQ() {
     for (unsigned long i=0; i<wQuery_size; ++i) {
         if (wQuery[i] != NULL) {
@@ -117,18 +128,22 @@ int wQueryQ() {
     return -1;
 }
 
+//Init writting stack
 void wQueryInit() {
     for (unsigned long i=0; i<wQuery_size; ++i) {
         wQuery[i] = NULL;
     }
 }
 
+//Pop something from writting stack
 wQuery_t* wQueryPop() {
     wQuery_t* res = NULL;
     //randomly start
-    unsigned long init = rand() % wQuery_size;
+    //unsigned long init = rand() % wQuery_size;
 
-    for (unsigned long i=init; i<wQuery_size; ++i) {
+    //sem_wait(&sem);
+    //pthread_mutex_lock(&m);
+    for (unsigned long i=0; i<wQuery_size; ++i) {
         if (wQuery[i] != NULL) {
             res =  wQuery[i];
             wQuery[i] = NULL;
@@ -136,7 +151,7 @@ wQuery_t* wQueryPop() {
         }
     }
 
-    if (res == NULL) {
+    /*if (res == NULL) {
         for (unsigned long i=init; i>=0; --i) {
             if (wQuery[i] != NULL) {
                 res =  wQuery[i];
@@ -144,12 +159,15 @@ wQuery_t* wQueryPop() {
                 break;
             }
         }        
-    }
+    }*/
 
+    //sem_post(&sem);
+    //pthread_mutex_unlock(&m);
 
     return res;
 }
 
+//helper functions to check the status of the socket
 void wSocketsSet(SOCKET socketId, int state) {
     wSockets[hash(socketId)].state = state;
     wSockets[hash(socketId)].skip = 0;
@@ -173,6 +191,8 @@ int wSocketsGetState(SOCKET socketId) {
 
 int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int bufferSize);
 
+
+//push to the stack a task to write data to the socket
 void addToWriteQuery(SOCKET socketId, BYTE *buf, unsigned long dataLength) {
     wQuery_t* query;
 
@@ -181,23 +201,36 @@ void addToWriteQuery(SOCKET socketId, BYTE *buf, unsigned long dataLength) {
     query->socket = socketId;
     query->length = dataLength;
     query->buf = (BYTE*)malloc(sizeof(BYTE)*dataLength);
+    //make a copy, since WL frees all memory
     memcpy((void*) query->buf, (void*)buf, sizeof(BYTE)*dataLength);
     wQueryPush(query);
 }
 
+//check the stack
 void pokeWriteQuery() {
-    //SLEEP(10 * ms);
-    if (wQueryQ() < 0 || qblock == 0) return;
+    //a fence to block the operations with the stack
+    sem_wait(&mutex);
 
+    //if there is something
+    if (wQueryQ() < 0) return;
+    //printf("[wquery]\r\n\tchecking...\r\n\r\n");
+
+    //pop
     wQuery_t* ptr = wQueryPop();
+    //printf("[wquery]\r\n\tpopped...\r\n\r\n");
+    //just in case
+    if (ptr == NULL) return;
 
+    //skip if it is a delayed message
     if (wSocketsCheckSkipping(ptr->socket) > 0) {
+        //decreate the counter
         wSocketsSubtractSkipping(ptr->socket);
+        //put it back
         wQueryPush(ptr);
         return;
     }
 
-    printf("[wquery]\r\n\tchecking...\r\n\r\n");
+    //now we can finally try to write something
     int result = socketWrite(ptr->socket, ptr->buf, ptr->length, 0);
     if (result == SOCKET_ERROR) {
         printf("[wquery]\r\n\tsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
@@ -208,10 +241,15 @@ void pokeWriteQuery() {
         printf("[wquery]\r\n\t bytes written %ld!\r\n\r\n", result);
     }
 
-    printf("[wquery]\r\n\tq free buffer\r\n\r\n");
+    //free buffers
+    //printf("[wquery]\r\n\tq free buffer\r\n\r\n");
     free(ptr->buf);
-    printf("[wquery]\r\n\tq free q object\r\n\r\n");
+    //printf("[wquery]\r\n\tq free q object\r\n\r\n");
     free(ptr);
+
+    //remove fence
+    sem_post(&mutex);
+
 }
 
 #pragma endregion
@@ -238,6 +276,8 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
 
     printf("[WolframLibrary_initialize]\r\ninitialized\r\n\r\n"); 
     wQueryInit();
+    
+    sem_init(&mutex, 0, 1);
 
     return LIBRARY_NO_ERROR; 
 }
@@ -288,6 +328,7 @@ int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int buffer
 
     int trials = 0;
 
+    //try until get an error of an overflow
     while(total < dataLength) {
         n = send(socketId, buf+total, bytesleft, 0);
         if (n == SOCKET_ERROR) { break; }
@@ -307,7 +348,8 @@ int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int buffer
     if (n == SOCKET_ERROR) {
         int err = GETSOCKETERRNO();
         printf("[socketWrite]\r\nerror %d\r\n\r\n", err); 
-        if (err == 35) {
+        if (err == 35 || err == 10035) {
+            //overflow of a buffer. Put the rest to the que
             printf("[socketWrite]\r\n Next time!\r\n\r\n");
             printf("[socketWrite]\r\n leftover bytes %ld\r\n\r\n", bytesleft);
             wSocketsAddSkipping(socketId);
@@ -593,9 +635,10 @@ DLLEXPORT int socketConnect(WolframLibraryData libData, mint Argc, MArgument *Ar
 #pragma region socketBinaryWrite[socketId_Integer, data: ByteArray[<>], dataLength_Integer, bufferLength_Integer]: socketId_Integer 
 
 DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
+    sem_wait(&mutex);
+
     SOCKET clientId = MArgument_getInteger(Args[0]); 
     MNumericArray mArr = MArgument_getMNumericArray(Args[1]); 
-    qblock = 0;
     int iResult;
     BYTE *data = (BYTE *)libData->numericarrayLibraryFunctions->MNumericArray_getData(mArr); 
     int dataLength = MArgument_getInteger(Args[2]); 
@@ -613,7 +656,7 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     if (wSocketsGetState(clientId) == SOCKET_ERROR) {
         printf("[socketBinaryWrite]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
         MArgument_setInteger(Res, SOCKET_ERROR); 
-        qblock = -1;
+        sem_post(&mutex);
         return LIBRARY_FUNCTION_ERROR;         
     }
 
@@ -622,7 +665,8 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     
     //printf("[socketWrite]\r\nwrite %d bytes\r\n\r\n", dataLength);
     MArgument_setInteger(Res, clientId);
-    qblock = -1;
+
+    sem_post(&mutex);
 
     return LIBRARY_NO_ERROR;
 }
@@ -632,8 +676,9 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
 #pragma region socketWriteString[socketId_Integer, data_String, dataLength_Integer, bufferSize_Integer]: socketId_Integer 
 
 DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
+    sem_wait(&mutex);
+
     int iResult; 
-    qblock = 0;
     SOCKET socketId = MArgument_getInteger(Args[0]); 
     char* data = MArgument_getUTF8String(Args[1]); 
     int dataLength = MArgument_getInteger(Args[2]); 
@@ -649,7 +694,7 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
     if (wSocketsGetState(socketId) == SOCKET_ERROR) {
         printf("[socketWriteString]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
         MArgument_setInteger(Res, SOCKET_ERROR); 
-        qblock = -1;
+        sem_post(&mutex);
         return LIBRARY_FUNCTION_ERROR;         
     }
     
@@ -657,7 +702,8 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
   
     //printf("[socketWriteString]\r\nwrite %d bytes\r\n\r\n", dataLength);
     MArgument_setInteger(Res, socketId);
-    qblock = -1;
+    sem_post(&mutex);
+
     return LIBRARY_NO_ERROR;
 }
 
