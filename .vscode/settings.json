@@ -1,8 +1,24 @@
 {
     "files.associations": {
-        "*.wsp": "php",
-        "*.wls": "wolfram",
         "*.wl": "wolfram",
-        "random": "c"
+        "*.wls": "wolfram",
+        "*.wlx": "javascriptreact",
+        "*.wsp": "php",
+        "random": "c",
+        "__hash_table": "c",
+        "__split_buffer": "c",
+        "array": "c",
+        "bitset": "c",
+        "deque": "c",
+        "initializer_list": "c",
+        "queue": "c",
+        "span": "c",
+        "string": "c",
+        "string_view": "c",
+        "unordered_map": "c",
+        "vector": "c",
+        "format": "c",
+        "__node_handle": "c",
+        "charconv": "c"
     }
 }

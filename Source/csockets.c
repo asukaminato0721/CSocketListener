@@ -48,6 +48,172 @@
 
 volatile int emergencyExit = 0;
 
+long sptr = -1;
+
+volatile int qblock = -1;
+
+typedef struct {
+    SOCKET socket;
+    BYTE* buf;
+    unsigned long length;
+} wQuery_t;
+
+//just a stack
+#define wQuery_size 2048
+wQuery_t* wQuery[2048];
+
+typedef struct {
+    int state;
+    int skip; 
+} wSocket_t;
+
+//hash map
+#define hashmap_size 4096
+wSocket_t wSockets[hashmap_size];
+
+unsigned long hash(unsigned long key) {
+	/* Robert Jenkins' 32 bit Mix Function */
+	key += (key << 12);
+	key ^= (key >> 22);
+	key += (key << 4);
+	key ^= (key >> 9);
+	key += (key << 10);
+	key ^= (key >> 2);
+	key += (key << 7);
+	key ^= (key >> 12);
+
+	/* Knuth's Multiplicative Method */
+	key = ((key) >> 3) * 2654435761;
+
+	return key % hashmap_size;
+}
+
+void wQueryPush(wQuery_t* q) {
+    //randomly start
+    unsigned long init = rand() % wQuery_size;
+
+    for (unsigned long i=init; i<wQuery_size; ++i) {
+        if (wQuery[i] == NULL) {
+            wQuery[i] = q;
+            return;
+        }
+    }
+
+    for (unsigned long i=init; i>=0; --i) {
+        if (wQuery[i] == NULL) {
+            wQuery[i] = q;
+            return;
+        }
+    }    
+}
+
+int wQueryQ() {
+    for (unsigned long i=0; i<wQuery_size; ++i) {
+        if (wQuery[i] != NULL) {
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+void wQueryInit() {
+    for (unsigned long i=0; i<wQuery_size; ++i) {
+        wQuery[i] = NULL;
+    }
+}
+
+wQuery_t* wQueryPop() {
+    wQuery_t* res = NULL;
+    //randomly start
+    unsigned long init = rand() % wQuery_size;
+
+    for (unsigned long i=init; i<wQuery_size; ++i) {
+        if (wQuery[i] != NULL) {
+            res =  wQuery[i];
+            wQuery[i] = NULL;
+            break;
+        }
+    }
+
+    if (res == NULL) {
+        for (unsigned long i=init; i>=0; --i) {
+            if (wQuery[i] != NULL) {
+                res =  wQuery[i];
+                wQuery[i] = NULL;
+                break;
+            }
+        }        
+    }
+
+
+    return res;
+}
+
+void wSocketsSet(SOCKET socketId, int state) {
+    wSockets[hash(socketId)].state = state;
+    wSockets[hash(socketId)].skip = 0;
+}
+
+void wSocketsSubtractSkipping(SOCKET socketId) {
+    wSockets[hash(socketId)].skip -= 1;
+}
+
+void wSocketsAddSkipping(SOCKET socketId) {
+    wSockets[hash(socketId)].skip += 300;
+}
+
+int wSocketsCheckSkipping(SOCKET socketId) {
+    return wSockets[hash(socketId)].skip;
+}
+
+int wSocketsGetState(SOCKET socketId) {
+    return wSockets[hash(socketId)].state;
+}
+
+int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int bufferSize);
+
+void addToWriteQuery(SOCKET socketId, BYTE *buf, unsigned long dataLength) {
+    wQuery_t* query;
+
+    printf("[wquery]\r\n\tadded to the query\r\n\r\n");
+    query = (wQuery_t*)malloc(sizeof(wQuery_t));
+    query->socket = socketId;
+    query->length = dataLength;
+    query->buf = (BYTE*)malloc(sizeof(BYTE)*dataLength);
+    memcpy((void*) query->buf, (void*)buf, sizeof(BYTE)*dataLength);
+    wQueryPush(query);
+}
+
+void pokeWriteQuery() {
+    //SLEEP(10 * ms);
+    if (wQueryQ() < 0 || qblock == 0) return;
+
+    wQuery_t* ptr = wQueryPop();
+
+    if (wSocketsCheckSkipping(ptr->socket) > 0) {
+        wSocketsSubtractSkipping(ptr->socket);
+        wQueryPush(ptr);
+        return;
+    }
+
+    printf("[wquery]\r\n\tchecking...\r\n\r\n");
+    int result = socketWrite(ptr->socket, ptr->buf, ptr->length, 0);
+    if (result == SOCKET_ERROR) {
+        printf("[wquery]\r\n\tsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
+        CLOSESOCKET(ptr->socket);
+        wSocketsSet(ptr->socket, INVALID_SOCKET);
+    } else {
+        printf("[wquery]\r\n\tq finished\r\n\r\n");
+        printf("[wquery]\r\n\t bytes written %ld!\r\n\r\n", result);
+    }
+
+    printf("[wquery]\r\n\tq free buffer\r\n\r\n");
+    free(ptr->buf);
+    printf("[wquery]\r\n\tq free q object\r\n\r\n");
+    free(ptr);
+}
+
 #pragma endregion
 
 #pragma region initialization 
@@ -71,6 +237,7 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     
 
     printf("[WolframLibrary_initialize]\r\ninitialized\r\n\r\n"); 
+    wQueryInit();
 
     return LIBRARY_NO_ERROR; 
 }
@@ -107,39 +274,50 @@ int currentTime() {
     return 0;
 }
 
-int socketWrite(SOCKET socketId, BYTE *data, int dataLength, int bufferSize){ 
-    int iResult; 
+int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int bufferSize) { 
+    /*int iResult; 
     int writeLength; 
     char *buffer; 
     int errno;   
-    SOCKET currentSoketIdBackup; 
-    int timeoutMult = 2; 
- 
-    for (int i = 0; i < dataLength; i += bufferSize) { 
-        buffer = (char*)&data[i];  
-        writeLength = dataLength - i > bufferSize ? bufferSize : dataLength - i;  
-         
-        iResult = send(socketId, buffer, writeLength, 0); 
-        if (iResult == SOCKET_ERROR) { 
-            errno = GETSOCKETERRNO();  
-            if (errno == 10035 || errno == 35) { 
-                SLEEP(timeoutMult * ms); 
-                printf("[socketWrite]\r\nerror 10035\r\n\r\n"); 
-                i -= bufferSize; 
-                timeoutMult *= 2; 
-                if (timeoutMult > 1000) { 
-                    return SOCKET_ERROR; 
-                } 
-            } else { 
-                printf("[socketWrite]\r\nerror %d\r\n\r\n", GETSOCKETERRNO()); 
-                return SOCKET_ERROR; 
-            } 
-        } else { 
-            timeoutMult = 2; 
-        } 
-    } 
- 
-    return dataLength; 
+    SOCKET currentSoketIdBackup; */
+
+
+    unsigned long total = 0;        // how many bytes we've sent
+    unsigned long bytesleft = dataLength; // how many we have left to send
+    long n;
+
+    int trials = 0;
+
+    while(total < dataLength) {
+        n = send(socketId, buf+total, bytesleft, 0);
+        if (n == SOCKET_ERROR) { break; }
+        total += n;
+        bytesleft -= n;
+
+        trials++;
+        printf("wroom-wroom\r\n");
+
+        /*if (trials > 100) {
+            printf("[socketWrite]\r\nfuck it!\r\n\r\n"); 
+            n = SOCKET_ERROR;
+            break;
+        }*/
+    }
+
+    if (n == SOCKET_ERROR) {
+        int err = GETSOCKETERRNO();
+        printf("[socketWrite]\r\nerror %d\r\n\r\n", err); 
+        if (err == 35) {
+            printf("[socketWrite]\r\n Next time!\r\n\r\n");
+            printf("[socketWrite]\r\n leftover bytes %ld\r\n\r\n", bytesleft);
+            wSocketsAddSkipping(socketId);
+            addToWriteQuery(socketId, buf+total, bytesleft);
+            return total;
+        }
+        return SOCKET_ERROR; 
+    }
+
+    return total;
 }
 
 MNumericArray createByteArray(WolframLibraryData libData, BYTE *data, const mint dataLength){
@@ -217,6 +395,8 @@ DLLEXPORT int socketOpen(WolframLibraryData libData, mint Argc, MArgument *Args,
 
     if (iResult != NO_ERROR) {
         printf("[socketOpen]\r\nioctlsocket failed with error: %d\r\n\r\n", iResult);
+    } else {
+        wSocketsSet(listenSocket, 1);
     }
 
     freeaddrinfo(address);
@@ -234,6 +414,7 @@ DLLEXPORT int socketClose(WolframLibraryData libData, mint Argc, MArgument *Args
     SOCKET socketId = MArgument_getInteger(Args[0]);
     printf("[socketClose]\r\nsocket id: %d\r\n\r\n", (int)socketId);
     MArgument_setInteger(Res, CLOSESOCKET(socketId));
+    wSocketsSet(socketId, INVALID_SOCKET);
     return LIBRARY_NO_ERROR; 
 }
 
@@ -282,9 +463,13 @@ static void socketListenerTask(mint taskId, void* vtarg)
 	{
         SLEEP(ms);
 
+        pokeWriteQuery();
+
         clientSocket = accept(server->listenSocket, NULL, NULL); 
         if (ISVALIDSOCKET(clientSocket)) {
             printf("[socketListenerTask]\r\nnew client: %d\r\n\r\n", (int)clientSocket);
+            
+            wSocketsSet(clientSocket, 1);
             server->clients[server->clientsLength] = clientSocket;
             server->clientsLength++;
             printf("[socketListenerTask]\r\nclients length: %d\r\n\r\n", (int)server->clientsLength);
@@ -312,6 +497,7 @@ static void socketListenerTask(mint taskId, void* vtarg)
                 } else if (iResult == 0) {
                     printf("[socketListenerTask]\r\nclient %d closed\r\n\r\n", (int)server->clients[i]);
                     server->clients[i] = INVALID_SOCKET;
+                    wSocketsSet(server->clients[i], INVALID_SOCKET);
                 }
             }
         }
@@ -322,6 +508,7 @@ static void socketListenerTask(mint taskId, void* vtarg)
     {
         printf("[socketListenerTask]\r\nclose client: %d\r\n\r\n", (int)server->clients[i]);
         CLOSESOCKET(server->clients[i]);
+        wSocketsSet(server->clients[i], INVALID_SOCKET);
     }
 
     free(targ); 
@@ -391,7 +578,11 @@ DLLEXPORT int socketConnect(WolframLibraryData libData, mint Argc, MArgument *Ar
 
     if (iResult != NO_ERROR) {
         printf("[socketOpen]\r\nioctlsocket failed with error: %d\r\n\r\n", iResult);
+    } else {
+        wSocketsSet(connectSocket, 1);
     }
+
+
 
     MArgument_setInteger(Res, connectSocket); 
     return LIBRARY_NO_ERROR;
@@ -404,22 +595,35 @@ DLLEXPORT int socketConnect(WolframLibraryData libData, mint Argc, MArgument *Ar
 DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
     SOCKET clientId = MArgument_getInteger(Args[0]); 
     MNumericArray mArr = MArgument_getMNumericArray(Args[1]); 
-
+    qblock = 0;
     int iResult;
     BYTE *data = (BYTE *)libData->numericarrayLibraryFunctions->MNumericArray_getData(mArr); 
     int dataLength = MArgument_getInteger(Args[2]); 
     int bufferSize = MArgument_getInteger(Args[3]); 
     
-    iResult = socketWrite(clientId, data, dataLength, bufferSize); 
+    
+
+    /*iResult = socketWrite(clientId, data, dataLength, bufferSize); 
     if (iResult == SOCKET_ERROR) {
         printf("[socketWrite]\r\n\tsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
         CLOSESOCKET(clientId);
         MArgument_setInteger(Res, GETSOCKETERRNO()); 
         return LIBRARY_FUNCTION_ERROR; 
+    }*/
+    if (wSocketsGetState(clientId) == SOCKET_ERROR) {
+        printf("[socketBinaryWrite]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
+        MArgument_setInteger(Res, SOCKET_ERROR); 
+        qblock = -1;
+        return LIBRARY_FUNCTION_ERROR;         
     }
+
     
-    printf("[socketWrite]\r\nwrite %d bytes\r\n\r\n", dataLength);
+    addToWriteQuery(clientId, data, dataLength);
+    
+    //printf("[socketWrite]\r\nwrite %d bytes\r\n\r\n", dataLength);
     MArgument_setInteger(Res, clientId);
+    qblock = -1;
+
     return LIBRARY_NO_ERROR;
 }
 
@@ -429,21 +633,31 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
 
 DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
     int iResult; 
+    qblock = 0;
     SOCKET socketId = MArgument_getInteger(Args[0]); 
     char* data = MArgument_getUTF8String(Args[1]); 
     int dataLength = MArgument_getInteger(Args[2]); 
     int bufferSize = MArgument_getInteger(Args[3]); 
     
-    iResult = socketWrite(socketId, data, dataLength, bufferSize); 
+    /*iResult = socketWrite(socketId, data, dataLength, bufferSize); 
     if (iResult == SOCKET_ERROR) {
         printf("[socketWriteString]\r\nsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
         CLOSESOCKET(socketId);
         MArgument_setInteger(Res, GETSOCKETERRNO()); 
         return LIBRARY_FUNCTION_ERROR; 
+    }*/
+    if (wSocketsGetState(socketId) == SOCKET_ERROR) {
+        printf("[socketWriteString]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
+        MArgument_setInteger(Res, SOCKET_ERROR); 
+        qblock = -1;
+        return LIBRARY_FUNCTION_ERROR;         
     }
+    
+    addToWriteQuery(socketId, data, dataLength);
   
-    printf("[socketWriteString]\r\nwrite %d bytes\r\n\r\n", dataLength);
+    //printf("[socketWriteString]\r\nwrite %d bytes\r\n\r\n", dataLength);
     MArgument_setInteger(Res, socketId);
+    qblock = -1;
     return LIBRARY_NO_ERROR;
 }
 
