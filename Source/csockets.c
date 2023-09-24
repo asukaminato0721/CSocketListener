@@ -507,7 +507,16 @@ DLLEXPORT int socketOpen(WolframLibraryData libData, mint Argc, MArgument *Args,
 DLLEXPORT int socketClose(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
     SOCKET socketId = MArgument_getInteger(Args[0]);
     printf("[socketClose]\r\nsocket id: %d\r\n\r\n", (int)socketId);
-    MArgument_setInteger(Res, CLOSESOCKET(socketId));
+    int res = 0;
+    //better to add to the query for PIPE!!!
+    if (wSocketsGetState(socketId) != INVALID_SOCKET) {
+        res = CLOSESOCKET(socketId);
+        
+        wSocketsSet(socketId, INVALID_SOCKET);
+    } else {
+        printf("[socketClose]\r\ns already closed! id: %d\r\n\r\n", (int)socketId);
+    }
+    MArgument_setInteger(Res, res);
     wSocketsSet(socketId, INVALID_SOCKET);
     return LIBRARY_NO_ERROR; 
 }
@@ -794,7 +803,7 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
         MArgument_setInteger(Res, GETSOCKETERRNO()); 
         return LIBRARY_FUNCTION_ERROR; 
     }*/
-    if (wSocketsGetState(clientId) == SOCKET_ERROR) {
+    if (wSocketsGetState(clientId) == INVALID_SOCKET) {
         printf("[socketBinaryWrite]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
         MArgument_setInteger(Res, SOCKET_ERROR); 
         //sem_post(&mutex);
@@ -836,7 +845,7 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
         MArgument_setInteger(Res, GETSOCKETERRNO()); 
         return LIBRARY_FUNCTION_ERROR; 
     }*/
-    if (wSocketsGetState(socketId) == SOCKET_ERROR) {
+    if (wSocketsGetState(socketId) == INVALID_SOCKET) {
         printf("[socketWriteString]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
         MArgument_setInteger(Res, SOCKET_ERROR); 
         sem_post(&mutex);
