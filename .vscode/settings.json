@@ -20,6 +20,8 @@
         "format": "c",
         "__node_handle": "c",
         "charconv": "c",
-        "__mutex_base": "c"
+        "__mutex_base": "c",
+        "ostream": "c",
+        "*.tcc": "c"
     }
 }

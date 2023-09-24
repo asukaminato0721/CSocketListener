@@ -44,7 +44,7 @@
 #include <semaphore.h>
 
 #include <poll.h>
-#define POLL_SIZE 32
+#define POLL_SIZE 256
 
 
 #include "WolframLibrary.h"
@@ -86,11 +86,10 @@ typedef struct {
 typedef struct {
     char type;
     SOCKET socketId;
-    unsigned long dataLength;
 } pipePacket_t;
 
 //just a stack
-#define wQuery_size 2048
+#define wQuery_size 1024
 wQuery_t* wQuery[wQuery_size];
 
 typedef struct {
@@ -100,7 +99,7 @@ typedef struct {
 } wSocket_t;
 
 //hash map
-#define hashmap_size 4096
+#define hashmap_size 8096
 wSocket_t wSockets[hashmap_size];
 
 unsigned long hash(unsigned long key) {
@@ -389,7 +388,7 @@ int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int buffer
     unsigned long bytesleft = dataLength; // how many we have left to send
     long n;
 
-    int trials = 0;
+    //int trials = 0;
 
     //try until get an error of an overflow
     while(total < dataLength) {
@@ -398,7 +397,7 @@ int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int buffer
         total += n;
         bytesleft -= n;
 
-        trials++;
+        //trials++;
         printf("wroom-wroom\r\n");
 
         /*if (trials > 100) {
@@ -509,18 +508,17 @@ DLLEXPORT int socketClose(WolframLibraryData libData, mint Argc, MArgument *Args
     printf("[socketClose]\r\nsocket id: %d\r\n\r\n", (int)socketId);
     int res = 0;
     //better to add to the query for PIPE!!!
-    /*if (wSocketsGetState(socketId) != INVALID_SOCKET) {
-        res = CLOSESOCKET(socketId);
-        
-        wSocketsSet(socketId, INVALID_SOCKET);
+    if (wSocketsGetState(socketId) != INVALID_SOCKET) {
+        pipePacket_t packet;
+        packet.type = "C";
+        packet.socketId = socketId;
+        write(wSocketsGetPipe(socketId)[1], &packet, sizeof(pipePacket_t));
     } else {
         printf("[socketClose]\r\ns already closed! id: %d\r\n\r\n", (int)socketId);
-    }*/
+    }
     //do we actually need to close it?
-    //no ;0
 
     MArgument_setInteger(Res, res);
-    wSocketsSet(socketId, INVALID_SOCKET);
     return LIBRARY_NO_ERROR; 
 }
 
@@ -593,7 +591,9 @@ static void socketListenerTask(mint taskId, void* vtarg)
     //adding a pipe
     poll_set[numfds].fd = pipe[0];
     poll_set[numfds].events = POLLIN;
-    char* temp = (char*)malloc(1);
+
+    pipePacket_t* cmd = (pipePacket_t*)malloc(sizeof(pipePacket_t));
+
     numfds++;    
     
     while(emergencyExit == 0 && libData->ioLibraryFunctions->asynchronousTaskAliveQ(taskId)) {
@@ -632,16 +632,41 @@ static void socketListenerTask(mint taskId, void* vtarg)
                 } else if (poll_set[fd_index].fd == pipe[0]) {
                     printf("Pipe!\n");
                     
-                    int result = read(pipe[0],&temp,1);
+                    int result = read(pipe[0], &cmd, sizeof(pipePacket_t));
                     if (result != 1) {
                         perror("read");
                         exit(3);
                     }
 
-                    if (pokeWriteQuery() > -1) {
-                        char ch='A';
-                        //selfinduced
-                        write(pipe[1], &ch,1);
+                    switch(cmd->type) {
+                        case "P":
+                            if (pokeWriteQuery() > -1) {
+                                pipePacket_t packet;
+                                packet.type = "P";
+                                //poke itself
+                                write(pipe[1], &packet, sizeof(pipePacket_t));
+                            }
+                        break;
+
+                        case "C":
+                            wSocketsSet(cmd->socketId, INVALID_SOCKET);
+                            CLOSESOCKET(cmd->socketId);
+
+                            //looking for it in the pool...
+                            for (int j=0; j<POLL_SIZE; ++j) {
+                                if (poll_set[j].fd == cmd->socketId) {
+                                    printf("removing it from the poll pool...\r\n");
+                                    poll_set[j].events = 0;
+                                    if (numfds > 1) {
+                                        poll_set[j] = poll_set[numfds - 1];
+                                    }
+                                    numfds--;  
+                                    break;
+                                }
+                            }
+
+                            printf("done!\r\n");
+                        break;
                     }
 
                 } else {
@@ -817,8 +842,9 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     addToWriteQuery(clientId, data, dataLength);
 
     //trigger the second thread safely
-    char ch='A';
-    write(wSocketsGetPipe(clientId)[1], &ch,1);
+    pipePacket_t packet;
+    packet.type = "P";
+    write(wSocketsGetPipe(clientId)[1], &packet, sizeof(pipePacket_t));
     
     //printf("[socketWrite]\r\nwrite %d bytes\r\n\r\n", dataLength);
     MArgument_setInteger(Res, clientId);
@@ -858,8 +884,10 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
     addToWriteQuery(socketId, data, dataLength);
 
     //trigger the second thread safely
-    char ch='A';
-    write(wSocketsGetPipe(socketId)[1], &ch,1);
+    //trigger the second thread safely
+    pipePacket_t packet;
+    packet.type = "P";
+    write(wSocketsGetPipe(socketId)[1], &packet, sizeof(pipePacket_t));
   
     //printf("[socketWriteString]\r\nwrite %d bytes\r\n\r\n", dataLength);
     MArgument_setInteger(Res, socketId);
