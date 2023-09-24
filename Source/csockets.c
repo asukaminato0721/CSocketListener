@@ -851,7 +851,7 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
     if (wSocketsGetState(socketId) == INVALID_SOCKET) {
         printf("[socketWriteString]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
         MArgument_setInteger(Res, SOCKET_ERROR); 
-        sem_post(&mutex);
+        //sem_post(&mutex);
         return LIBRARY_FUNCTION_ERROR;         
     }
     

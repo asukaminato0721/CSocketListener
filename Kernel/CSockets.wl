@@ -65,15 +65,15 @@ CSocketObject[Apply[socketConnect, StringSplit[address, ":"]]];
 
 
 CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_ByteArray] := 
-socketBinaryWrite[socketId, data, Length[data], $bufferSize]; 
+If[socketBinaryWrite[socketId, data, Length[data], $bufferSize] === -1, $Failed, 0]; 
 
 
 CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_List] := 
-socketBinaryWrite[socketId, ByteArray[data], Length[data], $bufferSize];
+If[socketBinaryWrite[socketId, ByteArray[data], Length[data], $bufferSize] === -1, $Failed, 0]; 
 
 
 CSocketObject /: WriteString[CSocketObject[socketId_Integer], data_String] := 
-socketWriteString[socketId, data, StringLength[data], $bufferSize]; 
+If[socketWriteString[socketId, data, StringLength[data], $bufferSize] === -1, $Failed, 0]; 
 
 
 CSocketObject /: SocketReadMessage[CSocketObject[socketId_Integer], bufferSize_Integer: $bufferSize] := 
