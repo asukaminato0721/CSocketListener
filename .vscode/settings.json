@@ -22,6 +22,7 @@
         "charconv": "c",
         "__mutex_base": "c",
         "ostream": "c",
-        "*.tcc": "c"
+        "*.tcc": "c",
+        "locale": "c"
     }
 }
