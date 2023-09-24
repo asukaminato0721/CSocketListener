@@ -49,6 +49,8 @@
 #include "WolframIOLibraryFunctions.h"
 #include "WolframNumericArrayLibrary.h"
 
+#pragma region xinternal 
+
 volatile int emergencyExit = 0;
 
 sem_t mutex;
@@ -178,7 +180,7 @@ void wSocketsSubtractSkipping(SOCKET socketId) {
 }
 
 void wSocketsAddSkipping(SOCKET socketId) {
-    wSockets[hash(socketId)].skip += 300;
+    wSockets[hash(socketId)].skip += 100;
 }
 
 int wSocketsCheckSkipping(SOCKET socketId) {
@@ -237,7 +239,7 @@ void pokeWriteQuery() {
         CLOSESOCKET(ptr->socket);
         wSocketsSet(ptr->socket, INVALID_SOCKET);
     } else {
-        printf("[wquery]\r\n\tq finished\r\n\r\n");
+        //printf("[wquery]\r\n\tq finished\r\n\r\n");
         printf("[wquery]\r\n\t bytes written %ld!\r\n\r\n", result);
     }
 
