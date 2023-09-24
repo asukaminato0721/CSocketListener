@@ -43,6 +43,8 @@
 #include <stdio.h>
 #include <semaphore.h>
 
+#include <poll.h>
+#define POLL_SIZE 32
 
 
 #include "WolframLibrary.h"
@@ -55,6 +57,24 @@ volatile int emergencyExit = 0;
 
 sem_t mutex;
 
+typedef struct Server_st {
+    SOCKET listenSocket;
+    SOCKET *clients;
+    int clientsLength;
+    int clientsLengthMax;
+    int bufferSize;
+    int* pipe;
+}* Server;
+
+Server serverList[100];
+int servers = 0;
+
+typedef struct SocketListenerTaskArgs_st {
+    WolframLibraryData libData; 
+    Server server;
+    int* pipe;
+}* SocketListenerTaskArgs; 
+
 long sptr = -1;
 
 typedef struct {
@@ -63,6 +83,12 @@ typedef struct {
     unsigned long length;
 } wQuery_t;
 
+typedef struct {
+    char type;
+    SOCKET socketId;
+    unsigned long dataLength;
+} pipePacket_t;
+
 //just a stack
 #define wQuery_size 2048
 wQuery_t* wQuery[wQuery_size];
@@ -70,6 +96,7 @@ wQuery_t* wQuery[wQuery_size];
 typedef struct {
     int state;
     int skip; 
+    int *pipe;
 } wSocket_t;
 
 //hash map
@@ -184,6 +211,8 @@ void wSocketsSet(SOCKET socketId, int state) {
     wSockets[hash(socketId)].skip = 0;
 }
 
+
+
 void wSocketsSubtractSkipping(SOCKET socketId) {
     wSockets[hash(socketId)].skip -= 1;
 }
@@ -198,6 +227,14 @@ int wSocketsCheckSkipping(SOCKET socketId) {
 
 int wSocketsGetState(SOCKET socketId) {
     return wSockets[hash(socketId)].state;
+}
+
+void wSocketsSetPipe(SOCKET socketId, int* pipe) {
+    wSockets[hash(socketId)].pipe = pipe;
+}
+
+int* wSocketsGetPipe(SOCKET socketId) {
+    return wSockets[hash(socketId)].pipe;
 }
 
 int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int bufferSize);
@@ -218,19 +255,19 @@ void addToWriteQuery(SOCKET socketId, BYTE *buf, unsigned long dataLength) {
 }
 
 //check the stack
-void pokeWriteQuery() {
+int pokeWriteQuery() {
     //a fence to block the operations with the stack
-    sem_wait(&mutex);
+    //sem_wait(&mutex);
 
     //if there is something
-    if (wQueryQ() < 0) return;
+    if (wQueryQ() < 0) return -1;
     //printf("[wquery]\r\n\tchecking...\r\n\r\n");
 
     //pop
     wQuery_t* ptr = wQueryPop();
     //printf("[wquery]\r\n\tpopped...\r\n\r\n");
     //just in case
-    if (ptr == NULL) return;
+    if (ptr == NULL) return 0;
 
     //skip if it is a delayed message
     if (wSocketsCheckSkipping(ptr->socket) > 0) {
@@ -239,7 +276,9 @@ void pokeWriteQuery() {
         wSocketsSubtractSkipping(ptr->socket);
         //put it back
         wQueryPush(ptr);
-        return;
+        //I DO NOT LIKE IT
+        SLEEP(ms);
+        return 0;
     }
 
     //now we can finally try to write something
@@ -260,7 +299,9 @@ void pokeWriteQuery() {
     free(ptr);
 
     //remove fence
-    sem_post(&mutex);
+    //sem_post(&mutex);
+
+    return 0;
 
 }
 
@@ -289,7 +330,7 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     printf("[WolframLibrary_initialize]\r\ninitialized\r\n\r\n"); 
     wQueryInit();
     
-    sem_init(&mutex, 0, 1);
+    //sem_init(&mutex, 0, 1);
 
     return LIBRARY_NO_ERROR; 
 }
@@ -299,7 +340,17 @@ DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) {
         WSACleanup(); 
     #endif 
     emergencyExit = 1;
+    
+    for (int i=0; i<servers; ++i) {
+        char ch='A';
+        write(serverList[i]->pipe[1], &ch,1);
+    }
+    
+    
     SLEEP(1000 * ms);
+
+
+
     printf("[WolframLibrary_uninitialize]\r\nuninitialized\r\n\r\n"); 
 
     return; 
@@ -381,18 +432,7 @@ MNumericArray createByteArray(WolframLibraryData libData, BYTE *data, const mint
     return nArray;
 }
 
-typedef struct Server_st {
-    SOCKET listenSocket;
-    SOCKET *clients;
-    int clientsLength;
-    int clientsLengthMax;
-    int bufferSize;
-}* Server;
 
-typedef struct SocketListenerTaskArgs_st {
-    WolframLibraryData libData; 
-    Server server;
-}* SocketListenerTaskArgs; 
 
 #pragma endregion
 
@@ -490,10 +530,22 @@ DLLEXPORT int socketListen(WolframLibraryData libData, mint Argc, MArgument *Arg
     server->clientsLengthMax=4;
     server->bufferSize=bufferSize;
 
+
+    //create a pipe
+    int *fd = (int*)malloc(sizeof(int)*2); 
+    pipe(fd);
+
+    server->pipe = fd;
+
     SocketListenerTaskArgs threadArg = (SocketListenerTaskArgs)malloc(sizeof(struct SocketListenerTaskArgs_st));
     threadArg->libData=libData; 
+    threadArg->pipe = fd;
     threadArg->server=server; 
     taskId = libData->ioLibraryFunctions->createAsynchronousTaskWithThread(socketListenerTask, threadArg);
+
+    
+    serverList[servers] = server;
+    servers++;
 
     printf("[socketListen]\r\nlistening task id: %d\r\n\r\n", (int)taskId);
     MArgument_setInteger(Res, taskId); 
@@ -506,56 +558,133 @@ static void socketListenerTask(mint taskId, void* vtarg)
     Server server = targ->server;
 	WolframLibraryData libData = targ->libData;
 
+    int* pipe = targ->pipe;
+
     int iResult;
     SOCKET clientSocket = INVALID_SOCKET;
     char *buffer = (char*)malloc(server->bufferSize * sizeof(char));
     mint dims[1];
     MNumericArray data;
 	DataStore ds;
+
+
+    //allocating POLL
+    struct pollfd poll_set[POLL_SIZE];
+    int numfds = 0;
+
+    //adding server
+    memset(poll_set, '\0', sizeof(poll_set));
+    poll_set[numfds].fd = server->listenSocket;
+    poll_set[numfds].events = POLLIN;
+    numfds++;
+
+    //adding a pipe
+    poll_set[numfds].fd = pipe[0];
+    poll_set[numfds].events = POLLIN;
+    char* temp = (char*)malloc(1);
+    numfds++;    
     
-	while(libData->ioLibraryFunctions->asynchronousTaskAliveQ(taskId) && emergencyExit == 0)
-	{
-        SLEEP(ms);
+    while(emergencyExit == 0 && libData->ioLibraryFunctions->asynchronousTaskAliveQ(taskId)) {
+	//while(libData->ioLibraryFunctions->asynchronousTaskAliveQ(taskId) && emergencyExit == 0)
+        printf("[socketListenerTask]\r\n waiting... \r\n\r\n");
+        poll(poll_set, numfds, -1);
+        printf("[socketListenerTask]\r\n new event! \r\n\r\n");
 
-        pokeWriteQuery();
+        for(int fd_index = 0; fd_index < numfds; fd_index++) {
+            if( poll_set[fd_index].revents & POLLIN ) {
+                if (poll_set[fd_index].fd == server->listenSocket) {
 
-        clientSocket = accept(server->listenSocket, NULL, NULL); 
-        if (ISVALIDSOCKET(clientSocket)) {
-            printf("[socketListenerTask]\r\nnew client: %d\r\n\r\n", (int)clientSocket);
-            
-            wSocketsSet(clientSocket, 1);
-            server->clients[server->clientsLength] = clientSocket;
-            server->clientsLength++;
-            printf("[socketListenerTask]\r\nclients length: %d\r\n\r\n", (int)server->clientsLength);
-        
-            if (server->clientsLength == server->clientsLengthMax) {
-                server->clientsLengthMax *= 2; 
-                server->clients = realloc(server->clients, server->clientsLengthMax * sizeof(SOCKET)); 
-            }
-        }
+                    clientSocket = accept(server->listenSocket, NULL, NULL); 
+                    if (ISVALIDSOCKET(clientSocket)) {
+                        printf("[socketListenerTask]\r\nnew client: %d\r\n\r\n", (int)clientSocket);
 
-        for (int i = 0; i < server->clientsLength; i++)
-        {
-            if (server->clients[i] != INVALID_SOCKET) {
-                iResult = recv(server->clients[i], buffer, server->bufferSize, 0); 
-                if (iResult > 0){
-                    //printf("[socketListenerTask]\r\nrecv %d bytes from %d\r\n\r\n", iResult, (int)server->clients[i]);
-                    dims[0] = iResult;
-                    libData->numericarrayLibraryFunctions->MNumericArray_new(MNumericArray_Type_UBit8, 1, dims, &data); 
-                    memcpy(libData->numericarrayLibraryFunctions->MNumericArray_getData(data), buffer, iResult);
-                    ds = libData->ioLibraryFunctions->createDataStore();
-                    libData->ioLibraryFunctions->DataStore_addInteger(ds, server->listenSocket);
-                    libData->ioLibraryFunctions->DataStore_addInteger(ds, server->clients[i]);
-                    libData->ioLibraryFunctions->DataStore_addMNumericArray(ds, data);
-                    libData->ioLibraryFunctions->raiseAsyncEvent(taskId, "Received", ds);
-                } else if (iResult == 0) {
-                    printf("[socketListenerTask]\r\nclient %d closed\r\n\r\n", (int)server->clients[i]);
-                    server->clients[i] = INVALID_SOCKET;
-                    wSocketsSet(server->clients[i], INVALID_SOCKET);
+                        wSocketsSet(clientSocket, 1);
+                        wSocketsSetPipe(clientSocket, pipe);
+                        
+                        server->clients[server->clientsLength] = clientSocket;
+                        //poolingPoolPush(clientSocket);
+                        server->clientsLength++;
+                        printf("[socketListenerTask]\r\nclients length: %d\r\n\r\n", (int)server->clientsLength);
+
+                        if (server->clientsLength == server->clientsLengthMax) {
+                            server->clientsLengthMax *= 2; 
+                            server->clients = realloc(server->clients, server->clientsLengthMax * sizeof(SOCKET)); 
+                        }
+
+                        poll_set[numfds].fd = clientSocket;
+                        poll_set[numfds].events = POLLIN;
+                        numfds++;
+
+                        printf("[poll] Adding client on fd %d\n", clientSocket);
+                    }
+                } else if (poll_set[fd_index].fd == pipe[0]) {
+                    printf("Pipe!\n");
+                    
+                    int result = read(pipe[0],&temp,1);
+                    if (result != 1) {
+                        perror("read");
+                        exit(3);
+                    }
+
+                    if (pokeWriteQuery() > -1) {
+                        char ch='A';
+                        //selfinduced
+                        write(pipe[1], &ch,1);
+                    }
+
+                } else {
+                    //ioctl(poll_set[fd_index].fd, FIONREAD, &nread);
+
+                    //read(poll_set[fd_index].fd, &ch, 1);
+                    printf("Serving client on fd %d\n", poll_set[fd_index].fd);
+                    //ch++;
+                    //write(poll_set[fd_index].fd, &ch, 1);
+
+                    iResult = recv(poll_set[fd_index].fd, buffer, server->bufferSize, 0); 
+                    if (iResult > 0){
+                        //printf("[socketListenerTask]\r\nrecv %d bytes from %d\r\n\r\n", iResult, (int)server->clients[i]);
+                        dims[0] = iResult;
+                        libData->numericarrayLibraryFunctions->MNumericArray_new(MNumericArray_Type_UBit8, 1, dims, &data); 
+                        memcpy(libData->numericarrayLibraryFunctions->MNumericArray_getData(data), buffer, iResult);
+                        ds = libData->ioLibraryFunctions->createDataStore();
+                        libData->ioLibraryFunctions->DataStore_addInteger(ds, server->listenSocket);
+                        libData->ioLibraryFunctions->DataStore_addInteger(ds, poll_set[fd_index].fd);
+                        libData->ioLibraryFunctions->DataStore_addMNumericArray(ds, data);
+                        libData->ioLibraryFunctions->raiseAsyncEvent(taskId, "Received", ds);
+                    } else if (iResult == 0) {
+                        printf("[socketListenerTask]\r\nclient %d closed\r\n\r\n", (int)poll_set[fd_index].fd);
+                        //poolingPoolDelete(poll_set[fd_index].fd);
+                        //server->clients[i] = INVALID_SOCKET;
+                        wSocketsSet(poll_set[fd_index].fd, INVALID_SOCKET);
+
+                        poll_set[fd_index].events = 0;
+                        printf("Removing client on fd %d\n", poll_set[fd_index].fd);
+                        int i;
+                        if (numfds > 1) {
+                            poll_set[fd_index] = poll_set[numfds - 1];
+                        }
+                        numfds--;                        
+                    }
+
                 }
             }
+        
         }
-	}
+
+        //if()
+        //SLEEP(ms);
+
+        //pokeWriteQuery();
+
+
+
+        /*for (int i = 0; i < server->clientsLength; i++)
+        {
+            if (server->clients[i] != INVALID_SOCKET) {
+
+            }
+        }*/
+    }
 
     printf("[socketListenerTask]\r\nremoveAsynchronousTask: %d\r\n\r\n", (int)taskId);
     for (int i = 0; i < server->clientsLength; i++)
@@ -647,7 +776,7 @@ DLLEXPORT int socketConnect(WolframLibraryData libData, mint Argc, MArgument *Ar
 #pragma region socketBinaryWrite[socketId_Integer, data: ByteArray[<>], dataLength_Integer, bufferLength_Integer]: socketId_Integer 
 
 DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
-    sem_wait(&mutex);
+    //sem_wait(&mutex);
 
     SOCKET clientId = MArgument_getInteger(Args[0]); 
     MNumericArray mArr = MArgument_getMNumericArray(Args[1]); 
@@ -668,17 +797,21 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     if (wSocketsGetState(clientId) == SOCKET_ERROR) {
         printf("[socketBinaryWrite]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
         MArgument_setInteger(Res, SOCKET_ERROR); 
-        sem_post(&mutex);
+        //sem_post(&mutex);
         return LIBRARY_FUNCTION_ERROR;         
     }
 
     
     addToWriteQuery(clientId, data, dataLength);
+
+    //trigger the second thread safely
+    char ch='A';
+    write(wSocketsGetPipe(clientId)[1], &ch,1);
     
     //printf("[socketWrite]\r\nwrite %d bytes\r\n\r\n", dataLength);
     MArgument_setInteger(Res, clientId);
 
-    sem_post(&mutex);
+    //sem_post(&mutex);
 
     return LIBRARY_NO_ERROR;
 }
@@ -688,7 +821,7 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
 #pragma region socketWriteString[socketId_Integer, data_String, dataLength_Integer, bufferSize_Integer]: socketId_Integer 
 
 DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
-    sem_wait(&mutex);
+    //sem_wait(&mutex);
 
     int iResult; 
     SOCKET socketId = MArgument_getInteger(Args[0]); 
@@ -711,10 +844,14 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
     }
     
     addToWriteQuery(socketId, data, dataLength);
+
+    //trigger the second thread safely
+    char ch='A';
+    write(wSocketsGetPipe(socketId)[1], &ch,1);
   
     //printf("[socketWriteString]\r\nwrite %d bytes\r\n\r\n", dataLength);
     MArgument_setInteger(Res, socketId);
-    sem_post(&mutex);
+    //sem_post(&mutex);
 
     return LIBRARY_NO_ERROR;
 }
