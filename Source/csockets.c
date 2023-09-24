@@ -509,13 +509,16 @@ DLLEXPORT int socketClose(WolframLibraryData libData, mint Argc, MArgument *Args
     printf("[socketClose]\r\nsocket id: %d\r\n\r\n", (int)socketId);
     int res = 0;
     //better to add to the query for PIPE!!!
-    if (wSocketsGetState(socketId) != INVALID_SOCKET) {
+    /*if (wSocketsGetState(socketId) != INVALID_SOCKET) {
         res = CLOSESOCKET(socketId);
         
         wSocketsSet(socketId, INVALID_SOCKET);
     } else {
         printf("[socketClose]\r\ns already closed! id: %d\r\n\r\n", (int)socketId);
-    }
+    }*/
+    //do we actually need to close it?
+    //no ;0
+
     MArgument_setInteger(Res, res);
     wSocketsSet(socketId, INVALID_SOCKET);
     return LIBRARY_NO_ERROR; 
