@@ -65,7 +65,7 @@ typedef struct {
 
 //just a stack
 #define wQuery_size 2048
-wQuery_t* wQuery[2048];
+wQuery_t* wQuery[wQuery_size];
 
 typedef struct {
     int state;
@@ -96,10 +96,12 @@ unsigned long hash(unsigned long key) {
 //Push to the writting stack
 void wQueryPush(wQuery_t* q) {
     //randomly start
-    //unsigned long init = rand() % wQuery_size;
+    long init = rand() % wQuery_size;
     //sem_wait(&sem);
     // pthread_mutex_lock(&m);
-    for (unsigned long i=0; i<wQuery_size; ++i) {
+    //printf("[wquery]\r\n\tfirst push\r\n\r\n");
+    for (long i=init; i<wQuery_size; ++i) {
+        //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
         if (wQuery[i] == NULL) {
             wQuery[i] = q;
             //sem_post(&sem);
@@ -108,20 +110,22 @@ void wQueryPush(wQuery_t* q) {
         }
     }
 
-    /*for (unsigned long i=init; i>=0; --i) {
+    //printf("[wquery]\r\n\tsecond push\r\n\r\n");
+    for (long i=init; i>=0; --i) {
+        //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
         if (wQuery[i] == NULL) {
             wQuery[i] = q;
             //sem_post(&sem);
             //pthread_mutex_unlock(&m);
             return;
         }
-    }    */
+    }    
     
 }
 
 //Check if something in the writting stack
 int wQueryQ() {
-    for (unsigned long i=0; i<wQuery_size; ++i) {
+    for (long i=0; i<wQuery_size; ++i) {
         if (wQuery[i] != NULL) {
             return 0;
         }
@@ -141,11 +145,14 @@ void wQueryInit() {
 wQuery_t* wQueryPop() {
     wQuery_t* res = NULL;
     //randomly start
-    //unsigned long init = rand() % wQuery_size;
+    long init = rand() % wQuery_size;
 
+    //printf("[wquery]\r\n\tinitial %d\r\n\r\n", init);
     //sem_wait(&sem);
     //pthread_mutex_lock(&m);
-    for (unsigned long i=0; i<wQuery_size; ++i) {
+    //printf("[wquery]\r\n\tfirst pop\r\n\r\n");
+    for (long i=init; i<wQuery_size; ++i) {
+        //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
         if (wQuery[i] != NULL) {
             res =  wQuery[i];
             wQuery[i] = NULL;
@@ -153,15 +160,17 @@ wQuery_t* wQueryPop() {
         }
     }
 
-    /*if (res == NULL) {
-        for (unsigned long i=init; i>=0; --i) {
+    if (res == NULL) {
+        //printf("[wquery]\r\n\second pop\r\n\r\n");
+        for (long i=init; i>=0; --i) {
+            //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
             if (wQuery[i] != NULL) {
                 res =  wQuery[i];
                 wQuery[i] = NULL;
                 break;
             }
         }        
-    }*/
+    }
 
     //sem_post(&sem);
     //pthread_mutex_unlock(&m);
@@ -225,6 +234,7 @@ void pokeWriteQuery() {
 
     //skip if it is a delayed message
     if (wSocketsCheckSkipping(ptr->socket) > 0) {
+        printf("[wquery]\r\n\tskipping...\r\n\r\n");
         //decreate the counter
         wSocketsSubtractSkipping(ptr->socket);
         //put it back
