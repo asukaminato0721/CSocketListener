@@ -510,7 +510,7 @@ DLLEXPORT int socketClose(WolframLibraryData libData, mint Argc, MArgument *Args
     //better to add to the query for PIPE!!!
     if (wSocketsGetState(socketId) != INVALID_SOCKET) {
         pipePacket_t packet;
-        packet.type = "C";
+        packet.type = 'C';
         packet.socketId = socketId;
         write(wSocketsGetPipe(socketId)[1], &packet, sizeof(pipePacket_t));
     } else {
@@ -639,16 +639,16 @@ static void socketListenerTask(mint taskId, void* vtarg)
                     }
 
                     switch(cmd->type) {
-                        case "P":
+                        case 'P':
                             if (pokeWriteQuery() > -1) {
                                 pipePacket_t packet;
-                                packet.type = "P";
+                                packet.type = 'P';
                                 //poke itself
                                 write(pipe[1], &packet, sizeof(pipePacket_t));
                             }
                         break;
 
-                        case "C":
+                        case 'C':
                             wSocketsSet(cmd->socketId, INVALID_SOCKET);
                             CLOSESOCKET(cmd->socketId);
 
@@ -843,7 +843,7 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
 
     //trigger the second thread safely
     pipePacket_t packet;
-    packet.type = "P";
+    packet.type = 'P';
     write(wSocketsGetPipe(clientId)[1], &packet, sizeof(pipePacket_t));
     
     //printf("[socketWrite]\r\nwrite %d bytes\r\n\r\n", dataLength);
@@ -886,7 +886,7 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
     //trigger the second thread safely
     //trigger the second thread safely
     pipePacket_t packet;
-    packet.type = "P";
+    packet.type = 'P';
     write(wSocketsGetPipe(socketId)[1], &packet, sizeof(pipePacket_t));
   
     //printf("[socketWriteString]\r\nwrite %d bytes\r\n\r\n", dataLength);
