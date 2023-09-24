@@ -808,9 +808,9 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     }*/
     if (wSocketsGetState(clientId) == INVALID_SOCKET) {
         printf("[socketBinaryWrite]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
-        MArgument_setInteger(Res, SOCKET_ERROR); 
+        MArgument_setInteger(Res, -1); 
         //sem_post(&mutex);
-        return LIBRARY_FUNCTION_ERROR;         
+        return LIBRARY_NO_ERROR;         
     }
 
     
@@ -850,9 +850,9 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
     }*/
     if (wSocketsGetState(socketId) == INVALID_SOCKET) {
         printf("[socketWriteString]\r\n\tsend failed with error: %d\r\n\r\n", (int)SOCKET_ERROR);
-        MArgument_setInteger(Res, SOCKET_ERROR); 
+        MArgument_setInteger(Res, -1); 
         //sem_post(&mutex);
-        return LIBRARY_FUNCTION_ERROR;         
+        return LIBRARY_NO_ERROR;         
     }
     
     addToWriteQuery(socketId, data, dataLength);
