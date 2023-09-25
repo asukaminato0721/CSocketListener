@@ -1,0 +1,156 @@
+<?wsp LoadPage["components/header.wsp"] ?>
+  <body>
+    <div class="container">
+        <h2>Playground</h2>
+        <div id="canvas"></div>
+     
+    </div>
+
+    <script type="module">
+        const canvas = document.createElement('canvas');
+        var gl = canvas.getContext("webgl", {depth: false});
+
+        var height = <?wsp height ?>;
+        var width = <?wsp width ?>;
+
+        canvas.width = width;
+        canvas.height = height;
+
+        var fragmentShader;
+
+        {
+          const shader = gl.createShader(gl.FRAGMENT_SHADER);
+          gl.shaderSource(shader, `
+        precision highp float;
+        uniform vec2 u_ball1;
+        uniform vec2 u_ball2;
+        uniform vec2 u_ball3;
+
+        const float PI = 3.14159265359;
+
+        // https://github.com/d3/d3-color
+        vec3 cubehelix(vec3 c) {
+          float a = c.y * c.z * (1.0 - c.z);
+          float cosh = cos(c.x + PI / 2.0);
+          float sinh = sin(c.x + PI / 2.0);
+          return vec3(
+            (c.z + a * (1.78277 * sinh - 0.14861 * cosh)),
+            (c.z - a * (0.29227 * cosh + 0.90649 * sinh)),
+            (c.z + a * (1.97294 * cosh))
+          );
+        }
+
+        // https://github.com/d3/d3-scale-chromatic
+        vec3 cubehelixDefault(float t) {
+          return cubehelix(vec3(mix(300.0 / 180.0 * PI, -240.0 / 180.0 * PI, t), 0.5, t));
+        }
+
+        void main(void) {
+          float f = 1.0 / (distance(gl_FragCoord.xy, u_ball1)) + 1.0 / (distance(gl_FragCoord.xy, u_ball2)) + 1.0 / (distance(gl_FragCoord.xy, u_ball3));
+          float t = smoothstep(0.0, 1.0, (0.04 - f) / 0.04);
+          gl_FragColor = vec4(cubehelixDefault(t), 1.0);
+        }
+        `);
+          gl.compileShader(shader);
+          fragmentShader= shader;
+
+        }
+
+        var vertexShader;
+
+        {
+          const shader = gl.createShader(gl.VERTEX_SHADER);
+          gl.shaderSource(shader, `
+        attribute vec2 a_corner;
+        void main(void) {
+          gl_Position = vec4(a_corner, 0.0, 1.0);
+        }
+        `);
+          gl.compileShader(shader);
+           vertexShader = shader;
+
+        }
+
+        var program;
+        {
+          const program0 = gl.createProgram();
+          gl.attachShader(program0, vertexShader);
+          gl.attachShader(program0, fragmentShader);
+          gl.linkProgram(program0);
+           program = program0;
+        
+        };
+
+        var cornerBuffer;
+
+        {
+          const buffer = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+          gl.bufferData(gl.ARRAY_BUFFER, Float32Array.of(-1, -1, +1, -1, +1, +1, -1, +1), gl.STATIC_DRAW);
+          cornerBuffer = buffer;
+        }
+
+        var a_corner = gl.getAttribLocation(program, "a_corner")
+        var u_ball1 = gl.getUniformLocation(program, "u_ball1")
+        var u_ball2 = gl.getUniformLocation(program, "u_ball2")
+        var u_ball3 = gl.getUniformLocation(program, "u_ball3")
+
+        gl.viewport(0, 0, width, height);
+        gl.useProgram(program);
+        gl.enableVertexAttribArray(a_corner);
+        gl.vertexAttribPointer(a_corner, 2, gl.FLOAT, false, 0, 0);
+
+        //Frontend function, which is called by the Wolfram kernel
+        core.UpdateCanvas = async function(args, env) {
+       
+          const coords = await interpretate(args[0], {});
+          
+          gl.uniform2f(
+            u_ball1,
+            coords[0][0],
+            coords[0][1]
+          );
+          gl.uniform2f(
+            u_ball2,
+            coords[1][0],
+            coords[1][1]
+          );
+          gl.uniform2f(
+            u_ball3,
+            coords[2][0],
+            coords[2][1]
+          );
+          gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);  
+
+          requestAnimationFrame(animate);
+        }
+
+        function animate() {
+          core.FireEvent(["'reCompute'", 0]);
+        }
+
+        
+
+        const checkSocket = () => {
+            if (server.kernel) {
+                if (server.kernel.socket) {
+                    if (server.kernel.socket.readyState === 1) {
+                        requestAnimationFrame(animate);
+                        return;
+                    }
+                }
+            }
+
+            setTimeout(() => {
+                checkSocket();
+            }, 400);
+        }
+
+        checkSocket();
+
+        document.getElementById('canvas').appendChild(canvas);
+        
+    </script>
+  </body>
+
+<?wsp LoadPage["components/footer.wsp"] ?>
