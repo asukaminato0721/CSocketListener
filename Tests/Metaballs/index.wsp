@@ -126,7 +126,7 @@
         }
 
         function animate() {
-          core.FireEvent(["'reCompute'", 0]);
+          server.emitt("reCompute", 0);
         }
 
         
