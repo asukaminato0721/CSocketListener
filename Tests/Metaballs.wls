@@ -8,7 +8,7 @@ PacletRepositories[{
   Github -> "https://github.com/JerryI/HTTPHandler",
   Github -> "https://github.com/JerryI/WebSocketHandler",
   Github -> "https://github.com/JerryI/wl-wsp",
-  Github -> "https://github.com/JerryI/wl-misc"    
+  Github -> "https://github.com/JerryI/wl-misc"  
 }]
 
 
@@ -28,8 +28,7 @@ Get[FileNameJoin[{ParentDirectory[Directory[]], "Kernel", "CSocketListener.wl"}]
 <<JerryI`Misc`Events`
 <<JerryI`Misc`WLJS`Transport`
 
-
-$PublicDirectory = FileNameJoin[{Directory[], "Full"}]
+$PublicDirectory = FileNameJoin[{Directory[], "Metaballs"}]
 
 
 Print["Staring HTTP server..."];
@@ -44,7 +43,7 @@ http["MessageHandler", "Index"] = AssocMatchQ[<|"Path" -> "/"|>] -> (HypertextPr
 http["MessageHandler", "WSP"] = GetFileRequestQ[{"wsp"}] -> (HypertextProcess[#, "Base" -> $PublicDirectory] &)
 
 (* ::End::*)
-httplistener =  Check[CSocketListen["127.0.0.1:8010", tcp@# &], Print["FUCK LibraryLink and Sockets! Using shitty ZMQ..."]; SocketListen["127.0.0.1:8010", tcp@# &]];
+CSocketListen["127.0.0.1:8010", tcp@# &]
 
 Print["Staring WS/HTTP server..."];
 
@@ -68,22 +67,56 @@ WLJSTransportHandler["GetSymbol"] = Function[{expr, client, callback},
     callback[expr // ReleaseHold];
 ]
 
-Check[CSocketListen["127.0.0.1:8020", wcp@#&], Print["FUCK LibraryLink and Sockets! Using shitty ZMQ..."]; SocketListen["127.0.0.1:8020", wcp@#&]];
+CSocketListen["127.0.0.1:8020", wcp@# &]
 
 SetOptions[WSPEngine, "Cache" -> False];
 
 
 
+bodies  = NBodySimulation[
+  "InverseSquare", {
+  <|"Mass" -> 1, "Position" -> {0, 2}, "Velocity" -> {0, .5}|>,
+  <|"Mass" -> 1, "Position" -> {3, 0.4}, "Velocity" -> {+0.01, -.5}|>,
+  <|"Mass" -> 1, "Position" -> {-1.1, 0.4}, "Velocity" -> {-2.11, -.5}|>}, 1];
+
+width = 500;
+height = 500;
+t = 0;
+
+getScaled[t_] := Module[{max,min, pos = bodies[All, "Position", t]},
+  max = 1.5 Max[pos//Flatten] {1,1};
+  min = 1.5 Min[pos//Flatten] {1,1};
+
+  ( {width, height}  (# - min) / (max - min))& /@ pos
+];
+
+update = EventObject[<|"id"->"reCompute"|>];
 
 
-data = {{0,0}}; 
+$DefaultSerializer = ExportByteArray[#, "ExpressionJSON"]&;
 
-EventHandler["update", Function[d,
-  Print["updating data!"];
-  data = Table[{x, Sin[x 100 d]}, {x, 0, 2Pi, 0.01}];
-]]
+EventHandler[update, Function[data,
+
+  d = getScaled[t];
+
+  
+  t = t + 0.01;
+  If[t > 1.0, t = 0;
+  (* regenerate it! *)
+  bodies  = NBodySimulation[
+    "InverseSquare", {
+    <|"Mass" -> 1, "Position" -> RandomReal[{-3,3},2], "Velocity" -> RandomReal[{-3,3},2]|>,
+    <|"Mass" -> 1, "Position" -> RandomReal[{-3,3},2], "Velocity" -> RandomReal[{-3,3},2]|>,
+    <|"Mass" -> 1, "Position" -> RandomReal[{-3,3},2], "Velocity" -> RandomReal[{-3,3},2]|>}, 1]  
+  ];
 
 
-StringTemplate["open http://``:``/"][httplistener[[1]]["Host"], httplistener[[1]]["Port"]] // Print;
+  WebSocketSend[Global`client, Global`UpdateCanvas[d] // $DefaultSerializer];
+]];
+
+(* kickstarter rontSubmit[UpdateCanvas[getScaled[t]]]*)
+
+
+StringTemplate["open http://``:``/"]["127.0.0.1", "8010"] // Print;
 While[True, Pause[1]];
 

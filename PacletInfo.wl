@@ -3,11 +3,11 @@
 PacletObject[
   <|
     "Name" -> "KirillBelov/CSocketListener",
-    "Description" -> "Socket Listener powered by pure C",
+    "Description" -> "Socket Listener powered by pure C & UV",
     "Creator" -> "Kirill Belov",
     "License" -> "MIT",
     "PublisherID" -> "KirillBelov",
-    "Version" -> "1.3.5",
+    "Version" -> "1.3.6",
     "WolframVersion" -> "12+",
     "PrimaryContext" -> "KirillBelov`CSocketListener`",
     "Extensions" -> {

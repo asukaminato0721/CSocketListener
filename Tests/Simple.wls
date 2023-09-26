@@ -7,7 +7,8 @@ PacletRepositories[{
   Github -> "https://github.com/JerryI/TCPServer",
   Github -> "https://github.com/JerryI/HTTPHandler",
   Github -> "https://github.com/JerryI/WebSocketHandler",
-  Github -> "https://github.com/JerryI/wl-wsp"
+  Github -> "https://github.com/JerryI/wl-wsp",
+  Github -> "https://github.com/JerryI/wl-misc"    
 }]
 
 
@@ -23,6 +24,7 @@ Get[FileNameJoin[{ParentDirectory[Directory[]], "Kernel", "CSocketListener.wl"}]
 <<KirillBelov`WebSocketHandler`
 
 <<JerryI`WSP`
+<<JerryI`WSP`WLJS`
 
 $PublicDirectory = FileNameJoin[{Directory[], "Simple"}]
 
