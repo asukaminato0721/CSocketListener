@@ -4,7 +4,8 @@
 Get["CCompilerDriver`"]; 
 
 $libs = If[$OperatingSystem === "Windows", {"ws2_32"}, {}];
-$src  = If[$OperatingSystem === "Windows", "csockets.c", "usockets.c"];
+$src  = If[$OperatingSystem === "Windows" && False, "csockets.c", "usockets.c"];
+
 
 Block[{$directory, $libSrc, $libDir, $linkerOptions}, 
 	$directory = DirectoryName[If[$InputFileName == "", 
@@ -31,6 +32,7 @@ Block[{$directory, $libSrc, $libDir, $linkerOptions},
 	CreateLibrary[$libSrc, "csockets", 
 		"TargetDirectory" -> $libDir, 
 		"Debug" -> True,
-		"Libraries" -> $libs
+		"Libraries" -> $libs,
+		"IncludeDirectories" -> {FileNameJoin[{DirectoryName[$InputFileName] // ParentDirectory, "lib"}]}
 	]
 ]; 

@@ -12,7 +12,9 @@
     #define ISVALIDSOCKET(s) ((s) != INVALID_SOCKET)
     #define CLOSESOCKET(s) closesocket(s)
     #define GETSOCKETERRNO() (WSAGetLastError())
-    #pragma comment (lib, "Ws2_32.lib")
+    //#pragma comment (lib, "Ws2_32.lib")
+    #include <poll.h>
+    #include <pipe.h>
 #else
     #include <string.h>
     #include <stdio.h>
@@ -38,12 +40,13 @@
     #define CLOSESOCKET(s) close(s)
     #define GETSOCKETERRNO() (errno)
     #define BYTE uint8_t
+    #include <poll.h>
 #endif
 
 #include <stdio.h>
 #include <semaphore.h>
 
-#include <poll.h>
+
 //#include <sys/timerfd.h>
 #define POLL_SIZE 256
 
@@ -60,7 +63,7 @@
 
 volatile int emergencyExit = 0;
 
-sem_t mutex;
+//sem_t mutex;
 
 typedef struct Server_st {
     SOCKET listenSocket;
@@ -333,7 +336,7 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     
 
     printf("[WolframLibrary_initialize]\r\ninitialized\r\n\r\n"); 
-    sem_init(&mutex, 0, 1);
+    //sem_init(&mutex, 0, 1);
     wQueryInit();
     
     //sem_init(&mutex, 0, 1);
@@ -609,9 +612,9 @@ static void socketListenerTask(mint taskId, void* vtarg)
     
     while(emergencyExit == 0 && libData->ioLibraryFunctions->asynchronousTaskAliveQ(taskId)) {
 	//while(libData->ioLibraryFunctions->asynchronousTaskAliveQ(taskId) && emergencyExit == 0)
-        printf("[socketListenerTask]\r\n waiting... \r\n\r\n");
+        //printf("[socketListenerTask]\r\n waiting... \r\n\r\n");
         poll(poll_set, numfds, -1);
-        printf("[socketListenerTask]\r\n new event! \r\n\r\n");
+        //printf("[socketListenerTask]\r\n new event! \r\n\r\n");
 
         for(int fd_index = 0; fd_index < numfds; fd_index++) {
             if( poll_set[fd_index].revents & POLLIN ) {
@@ -689,9 +692,9 @@ static void socketListenerTask(mint taskId, void* vtarg)
 
                         case 'P':
                             printf("[poll] poke!\r\n");
-                            sem_wait(&mutex);
+                            //sem_wait(&mutex);
                             int st = pokeWriteQuery();
-                            sem_post(&mutex);
+                            //sem_post(&mutex);
 
                             if (st == ST_NEXT) {
                                 pipePacket_t packet;
@@ -867,6 +870,8 @@ DLLEXPORT int socketConnect(WolframLibraryData libData, mint Argc, MArgument *Ar
 #pragma region socketBinaryWrite[socketId_Integer, data: ByteArray[<>], dataLength_Integer, bufferLength_Integer]: socketId_Integer 
 
 DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
+    
+    
     //sem_wait(&mutex);
 
     SOCKET clientId = MArgument_getInteger(Args[0]); 
@@ -878,13 +883,7 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     
     
 
-    /*iResult = socketWrite(clientId, data, dataLength, bufferSize); 
-    if (iResult == SOCKET_ERROR) {
-        printf("[socketWrite]\r\n\tsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
-        CLOSESOCKET(clientId);
-        MArgument_setInteger(Res, GETSOCKETERRNO()); 
-        return LIBRARY_FUNCTION_ERROR; 
-    }*/
+
     pipePacket_t packet;
     int state = wSocketsGetState(clientId);
 
@@ -904,24 +903,24 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
             //addToWriteQuery(clientId, data, dataLength);
 
             //trigger the second thread safely
-            sem_wait(&mutex);
+            //sem_wait(&mutex);
             addToWriteQuery(clientId, data, dataLength);
-            sem_post(&mutex);
+            //sem_post(&mutex);
             packet.type = 'P';
             int fd = wSocketsGetPipe(clientId)[1];
             printf("[socketBinaryWrite]\r\n\tsent a trigger via pipe %d\r\n\r\n", 0);
             write(fd, &packet, sizeof(pipePacket_t));
 
-            /*
-            packet.type = 'W';
-            packet.socketId = clientId;
-            packet.payload = dataLength;
-            int fd = wSocketsGetPipe(clientId)[1];
-            printf("[socketBinaryWrite]\r\n\tsent via pipe %d\r\n\r\n", 0);
-            write(fd, &packet, sizeof(pipePacket_t));
-            write(fd, data, dataLength);*/
+            
+            //packet.type = 'W';
+            //packet.socketId = clientId;
+            //packet.payload = dataLength;
+            //int fd = wSocketsGetPipe(clientId)[1];
+            //printf("[socketBinaryWrite]\r\n\tsent via pipe %d\r\n\r\n", 0);
+            //write(fd, &packet, sizeof(pipePacket_t));
+            //write(fd, data, dataLength);
 
-            MArgument_setInteger(Res, clientId);
+            MArgument_setInteger(Res, clientId); 
             return LIBRARY_NO_ERROR;
     }
 
@@ -941,13 +940,7 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
     int dataLength = MArgument_getInteger(Args[2]); 
     int bufferSize = MArgument_getInteger(Args[3]); 
     
-    /*iResult = socketWrite(socketId, data, dataLength, bufferSize); 
-    if (iResult == SOCKET_ERROR) {
-        printf("[socketWriteString]\r\nsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
-        CLOSESOCKET(socketId);
-        MArgument_setInteger(Res, GETSOCKETERRNO()); 
-        return LIBRARY_FUNCTION_ERROR; 
-    }*/
+   
     int state = wSocketsGetState(socketId);
     pipePacket_t packet;
 
