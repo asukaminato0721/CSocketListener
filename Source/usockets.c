@@ -121,6 +121,7 @@ wSocket_t wSockets[hashmap_size];
 unsigned long hash(unsigned long key, unsigned int offset) {
     if (offset < 0 || offset > 32) {
         perror("offset hash table is way too big!");
+        exit(-1);
     }
     unsigned long knuth = 2654435769;
     unsigned long y = key;
@@ -279,7 +280,11 @@ unsigned long HashGet(SOCKET socketId, int offset) {
 
 void wSocketsSet(SOCKET socketId, int state) {
     unsigned long h = HashGet(socketId, 0);
-
+    if (wSockets[h].socketId != socketId) {
+        printf("Cannot set the state of a wrong socket %ld!\r\n", socketId);
+        exit(-1);
+        return;
+    }
     wSockets[h].state = state;
     wSockets[h].skip = 0;
 }
@@ -303,6 +308,7 @@ int wSocketsCheckSkipping(SOCKET socketId) {
 
 int wSocketsGetState(SOCKET socketId) {
     unsigned long h = HashGet(socketId, 0);
+    if (wSockets[h].socketId != socketId) return INVALID_SOCKET;
     return wSockets[h].state;
 }
 
@@ -366,6 +372,7 @@ int pokeWriteQuery() {
         printf("[wquery]\r\n\tsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
         CLOSESOCKET(ptr->socket);
         wSocketsSet(ptr->socket, INVALID_SOCKET);
+        HashFree(ptr->socket, 0);
     } else {
         //printf("[wquery]\r\n\tq finished\r\n\r\n");
         printf("[wquery]\r\n\t bytes written %ld!\r\n\r\n", result);
@@ -486,7 +493,7 @@ int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int buffer
         bytesleft -= n;
 
         //trials++;
-        printf("[send] wroom-wroom\r\n");
+        printf("[send] wroom-wroom for %ld\r\n", socketId);
 
         /*if (trials > 100) {
             printf("[socketWrite]\r\nfuck it!\r\n\r\n"); 
@@ -497,7 +504,7 @@ int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int buffer
 
     if (n == SOCKET_ERROR) {
         int err = GETSOCKETERRNO();
-        printf("[socketWrite]\r\nerror %d\r\n\r\n", err); 
+        printf("[socketWrite]\r\nerror %d for fd %ld\r\n\r\n", err, socketId); 
         if (err == 35 || err == 10035) {
             //overflow of a buffer. Put the rest to the que
             printf("[socketWrite]\r\n Next time!\r\n\r\n");
@@ -712,18 +719,19 @@ static void socketListenerTask(mint taskId, void* vtarg)
         printf("[socketListenerTask]\r\n new event! \r\n\r\n");
 
         for(int fd_index = 0; fd_index < numfds; fd_index++) {
-            if( poll_set[fd_index].revents & POLLIN ) {
+            if( poll_set[fd_index].revents ) {
                 if (poll_set[fd_index].fd == server->listenSocket) {
 
                     clientSocket = accept(server->listenSocket, NULL, NULL); 
                     if (ISVALIDSOCKET(clientSocket)) {
                         printf("[socketListenerTask]\r\nnew client: %d\r\n\r\n", (int)clientSocket);
+                        printf("[socketListenerTask]\r\npoll size: %d\r\n\r\n", (int)numfds);
 
                         HashAllocate(clientSocket, 0);
                         wSocketsSet(clientSocket, 1);
                         wSocketsSetPipe(clientSocket, pipe);
                         
-                        server->clients[server->clientsLength] = clientSocket;
+                        /*server->clients[server->clientsLength] = clientSocket;
                         //poolingPoolPush(clientSocket);
                         server->clientsLength++;
                         printf("[socketListenerTask]\r\nclients length: %d\r\n\r\n", (int)server->clientsLength);
@@ -731,22 +739,27 @@ static void socketListenerTask(mint taskId, void* vtarg)
                         if (server->clientsLength == server->clientsLengthMax) {
                             server->clientsLengthMax *= 2; 
                             server->clients = realloc(server->clients, server->clientsLengthMax * sizeof(SOCKET)); 
-                        }
+                        }*/
 
                         poll_set[numfds].fd = clientSocket;
                         poll_set[numfds].events = POLLIN;
                         numfds++;
 
                         printf("[poll] Adding client on fd %d\n", clientSocket);
+                    } else {
+                        printf("[poll] Cannot accept socket.. Problem with it at %ld\n", clientSocket);
                     }
+
                 } else if (poll_set[fd_index].fd == pipe[0]) {
-                    printf("Pipe!\n");
+                    
                     
                     int result = read(pipe[0], cmd, sizeof(pipePacket_t));
                     if (result != sizeof(pipePacket_t)) {
                         perror("read");
                         exit(3);
                     }
+
+                    printf("Pipe cmd: %c\n", cmd->type);
 
                     switch(cmd->type) {
                         case 'W':
@@ -760,9 +773,10 @@ static void socketListenerTask(mint taskId, void* vtarg)
 
                             result = socketWrite(cmd->socketId, wbuffer, cmd->payload, 0);
                             if (result == SOCKET_ERROR) {
-                                printf("[poll]\r\n\tsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
+                                //printf("[poll]\r\n\tsend failed with error: %d for %ld\r\n\r\n", (int)GETSOCKETERRNO(), cmd->socketId);
                                 CLOSESOCKET(cmd->socketId);
                                 wSocketsSet(cmd->socketId, INVALID_SOCKET);
+                                HashFree(cmd->socketId, 0);
 
                                 //looking for it in the pool...
                                 for (int j=0; j<POLL_SIZE; ++j) {
@@ -843,12 +857,25 @@ static void socketListenerTask(mint taskId, void* vtarg)
 
                     //read(poll_set[fd_index].fd, &ch, 1);
                     printf("Serving client on fd %d\n", poll_set[fd_index].fd);
+
+                    if (wSocketsGetState(poll_set[fd_index].fd) == INVALID_SOCKET) {
+                        printf("oupps... already closed %d\n", poll_set[fd_index].fd);
+                        printf("Removing client on fd %d\n", poll_set[fd_index].fd);
+                        int i;
+                        if (numfds > 1) {
+                            poll_set[fd_index] = poll_set[numfds - 1];
+                        } else {
+                            poll_set[fd_index].events = 0;
+                        }
+                        numfds--;  
+                        continue;                        
+                    }
                     //ch++;
                     //write(poll_set[fd_index].fd, &ch, 1);
 
                     iResult = recv(poll_set[fd_index].fd, buffer, server->bufferSize, 0); 
                     if (iResult > 0){
-                        //printf("[socketListenerTask]\r\nrecv %d bytes from %d\r\n\r\n", iResult, (int)server->clients[i]);
+                        printf("[socketListenerTask]\r\nrecv %d bytes from %d\r\n\r\n", iResult, (int)poll_set[fd_index].fd);
                         dims[0] = iResult;
                         libData->numericarrayLibraryFunctions->MNumericArray_new(MNumericArray_Type_UBit8, 1, dims, &data); 
                         memcpy(libData->numericarrayLibraryFunctions->MNumericArray_getData(data), buffer, iResult);
@@ -862,14 +889,36 @@ static void socketListenerTask(mint taskId, void* vtarg)
                         //poolingPoolDelete(poll_set[fd_index].fd);
                         //server->clients[i] = INVALID_SOCKET;
                         wSocketsSet(poll_set[fd_index].fd, INVALID_SOCKET);
+                        HashFree(poll_set[fd_index].fd, 0);
+                        close(poll_set[fd_index].fd);
+                        //HashFree(poll_set[fd_index].fd);
 
-                        poll_set[fd_index].events = 0;
+                        //poll_set[fd_index].events = 0;
                         printf("Removing client on fd %d\n", poll_set[fd_index].fd);
                         int i;
                         if (numfds > 1) {
                             poll_set[fd_index] = poll_set[numfds - 1];
+                        } else {
+                            poll_set[fd_index].events = 0;
                         }
                         numfds--;                        
+                    } else  {
+                        printf("[socketListenerTask]\r\nclient %d might be broken; error: %d\r\n\r\n", (int)poll_set[fd_index].fd, (int)GETSOCKETERRNO());
+                        /*                 
+                        //wSocketsSet(poll_set[fd_index].fd, INVALID_SOCKET);
+                        close(poll_set[fd_index].fd);
+                        wSocketsSet(poll_set[fd_index].fd, INVALID_SOCKET);
+                        HashFree(poll_set[fd_index].fd, 0);
+                        //poll_set[fd_index].events = 0;
+                        printf("Removing client on fd %d\n", poll_set[fd_index].fd);
+                        int i;
+                        if (numfds > 1) {
+                            poll_set[fd_index] = poll_set[numfds - 1];
+                        } else {
+                            poll_set[fd_index].events = 0;
+                        }
+                        numfds--;  */
+
                     }
 
                 }
