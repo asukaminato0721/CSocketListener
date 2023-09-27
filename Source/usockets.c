@@ -119,6 +119,9 @@ typedef struct {
 wSocket_t wSockets[hashmap_size];
 
 unsigned long hash(unsigned long key, unsigned int offset) {
+    if (offset < 0 || offset > 32) {
+        perror("offset hash table is way too big!");
+    }
     unsigned long knuth = 2654435769;
     unsigned long y = key;
     return ((y * knuth) >> (32 - offset)) % hashmap_size;
@@ -406,7 +409,7 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
         }
     #endif
 
-    
+    signal(SIGPIPE, SIG_IGN);//ignore signals
 
     printf("[WolframLibrary_initialize]\r\ninitialized\r\n\r\n"); 
     sem_init(&mutex, 0, 1);
@@ -676,6 +679,8 @@ static void socketListenerTask(mint taskId, void* vtarg)
     mint dims[1];
     MNumericArray data;
 	DataStore ds;
+
+    signal(SIGPIPE, SIG_IGN);//ignore signals
 
 
     //allocating POLL
