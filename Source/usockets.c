@@ -131,11 +131,11 @@ unsigned long hash(unsigned long key, unsigned int offset) {
 //Push to the writting stack
 void wQueryPush(wQuery_t* q) {
     //randomly start
-    long init = rand() % wQuery_size;
+    //long init = rand() % wQuery_size;
     //sem_wait(&sem);
     // pthread_mutex_lock(&m);
     //printf("[wquery]\r\n\tfirst push\r\n\r\n");
-    for (long i=init; i<wQuery_size; ++i) {
+    for (unsigned long i=0; i<wQuery_size; ++i) {
         //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
         if (wQuery[i] == NULL) {
             wQuery[i] = q;
@@ -146,7 +146,7 @@ void wQueryPush(wQuery_t* q) {
     }
 
     //printf("[wquery]\r\n\tsecond push\r\n\r\n");
-    for (long i=init; i>=0; --i) {
+    /*for (long i=init; i>=0; --i) {
         //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
         if (wQuery[i] == NULL) {
             wQuery[i] = q;
@@ -154,7 +154,7 @@ void wQueryPush(wQuery_t* q) {
             //pthread_mutex_unlock(&m);
             return;
         }
-    }    
+    }   */ 
     
 }
 
@@ -180,13 +180,13 @@ void wQueryInit() {
 wQuery_t* wQueryPop() {
     wQuery_t* res = NULL;
     //randomly start
-    long init = rand() % wQuery_size;
+    //long init = rand() % wQuery_size;
 
     //printf("[wquery]\r\n\tinitial %d\r\n\r\n", init);
     //sem_wait(&sem);
     //pthread_mutex_lock(&m);
     //printf("[wquery]\r\n\tfirst pop\r\n\r\n");
-    for (long i=init; i<wQuery_size; ++i) {
+    for (unsigned long i=0; i<wQuery_size; ++i) {
         //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
         if (wQuery[i] != NULL) {
             res =  wQuery[i];
@@ -195,7 +195,7 @@ wQuery_t* wQueryPop() {
         }
     }
 
-    if (res == NULL) {
+    /*if (res == NULL) {
         //printf("[wquery]\r\n\second pop\r\n\r\n");
         for (long i=init; i>=0; --i) {
             //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
@@ -205,7 +205,7 @@ wQuery_t* wQueryPop() {
                 break;
             }
         }        
-    }
+    }*/
 
     //sem_post(&sem);
     //pthread_mutex_unlock(&m);
