@@ -223,7 +223,6 @@ void HashCopy(SOCKET socketId, int offsetSrc, int offsetDest) {
 
 //helper functions to check the status of the socket
 unsigned long HashAllocate(SOCKET socketId, int offset) {
-    //sleep(1);
     printf("hash >> allocate %ld with offset %d\n", socketId, offset);
     unsigned long h = hash(socketId, offset);
     printf("hash >> %ld\n", h);
