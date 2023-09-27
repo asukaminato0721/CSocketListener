@@ -31,6 +31,7 @@ Block[{$directory, $libSrc, $libDir, $linkerOptions},
 	CreateLibrary[$libSrc, "csockets", 
 		"TargetDirectory" -> $libDir, 
 		"Debug" -> True,
-		"Libraries" -> $libs
+		"Libraries" -> $libs,
+		"IncludeDirectories" -> {FileNameJoin[{$directory, "Source", "lib"}]}
 	]
 ]; 

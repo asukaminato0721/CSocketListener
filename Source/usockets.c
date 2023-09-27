@@ -26,6 +26,7 @@
     #include <errno.h>
     #include <fcntl.h>
     #include <wchar.h>
+    #include <signal.h>
     #define INVALID_SOCKET -1
     #define NO_ERROR 0
     #define SOCKET_ERROR -1
@@ -44,6 +45,7 @@
 #include <semaphore.h>
 
 #include <poll.h>
+
 //#include <sys/timerfd.h>
 #define POLL_SIZE 256
 
@@ -99,30 +101,27 @@ typedef struct {
 wQuery_t* wQuery[wQuery_size];
 
 typedef struct {
+    SOCKET socketId;
     int state;
     int skip; 
     int *pipe;
+
+    int _flag;
 } wSocket_t;
 
 //hash map
-#define hashmap_size 8096
+
+#define HASH_FREE -199
+#define HASH_NEXT 33
+#define HASH_OCCUPIED 71
+
+#define hashmap_size 4096
 wSocket_t wSockets[hashmap_size];
 
-unsigned long hash(unsigned long key) {
-	/* Robert Jenkins' 32 bit Mix Function */
-	key += (key << 12);
-	key ^= (key >> 22);
-	key += (key << 4);
-	key ^= (key >> 9);
-	key += (key << 10);
-	key ^= (key >> 2);
-	key += (key << 7);
-	key ^= (key >> 12);
-
-	/* Knuth's Multiplicative Method */
-	key = ((key) >> 3) * 2654435761;
-
-	return key % hashmap_size;
+unsigned long hash(unsigned long key, unsigned int offset) {
+    unsigned long knuth = 2654435769;
+    unsigned long y = key;
+    return ((y * knuth) >> (32 - offset)) % hashmap_size;
 }
 
 //Push to the writting stack
@@ -210,36 +209,109 @@ wQuery_t* wQueryPop() {
     return res;
 }
 
+unsigned long HashAllocate(SOCKET socketId, int offset);
+
+void HashCopy(SOCKET socketId, int offsetSrc, int offsetDest) {
+    unsigned long hS = hash(socketId, offsetSrc);
+    printf("hash >> allocate for a copy\n");
+    unsigned long hD = HashAllocate(socketId, offsetDest);
+
+    printf("hash >> copied\n");
+
+    memcpy(&wSockets[hD], &wSockets[hS], sizeof(wSocket_t));
+}
+
 //helper functions to check the status of the socket
+unsigned long HashAllocate(SOCKET socketId, int offset) {
+    //sleep(1);
+    printf("hash >> allocate %ld with offset %d\n", socketId, offset);
+    unsigned long h = hash(socketId, offset);
+    printf("hash >> %ld\n", h);
+
+    if (wSockets[h]._flag == HASH_OCCUPIED) {
+        printf("hash >> collizion!\n");
+
+        //copy the original value
+        printf("hash >> copy old one %ld\n", wSockets[h].socketId);
+        HashCopy(wSockets[h].socketId, offset, offset + 1);
+
+        wSockets[h]._flag = HASH_NEXT;
+        return HashAllocate(socketId, offset + 1);
+    }
+
+    if (wSockets[h]._flag == HASH_NEXT) {
+        printf("hash >> next\n");
+        return HashAllocate(socketId, offset + 1);
+    }
+
+    printf("hash >> ok!\n");
+    wSockets[h]._flag = HASH_OCCUPIED;
+    wSockets[h].socketId = socketId;
+
+    return h;
+}
+
+void HashFree(SOCKET socketId, int offset) {
+    printf("hash >> freeing %ld\n", socketId);
+    unsigned long h = hash(socketId, offset);
+    if (wSockets[h]._flag == HASH_NEXT) {
+        return HashFree(socketId, offset + 1);
+    }
+
+    if (wSockets[h]._flag == HASH_OCCUPIED) {
+        wSockets[h]._flag = HASH_FREE;
+        return;
+    }
+
+    printf("hash >> already freed!\n");
+}
+
+unsigned long HashGet(SOCKET socketId, int offset) {
+    unsigned long h = hash(socketId, offset);
+    if (wSockets[h]._flag == HASH_NEXT) {
+        return HashGet(socketId, offset + 1);
+    }
+
+    return h;
+}
+
 void wSocketsSet(SOCKET socketId, int state) {
-    wSockets[hash(socketId)].state = state;
-    wSockets[hash(socketId)].skip = 0;
+    unsigned long h = HashGet(socketId, 0);
+
+    wSockets[h].state = state;
+    wSockets[h].skip = 0;
 }
 
 
 
 void wSocketsSubtractSkipping(SOCKET socketId) {
-    wSockets[hash(socketId)].skip -= 1;
+    unsigned long h = HashGet(socketId, 0);
+    wSockets[h].skip -= 1;
 }
 
 void wSocketsAddSkipping(SOCKET socketId) {
-    wSockets[hash(socketId)].skip += 70;
+    unsigned long h = HashGet(socketId, 0);
+    wSockets[h].skip += 70;
 }
 
 int wSocketsCheckSkipping(SOCKET socketId) {
-    return wSockets[hash(socketId)].skip;
+    unsigned long h = HashGet(socketId, 0);
+    return wSockets[h].skip;
 }
 
 int wSocketsGetState(SOCKET socketId) {
-    return wSockets[hash(socketId)].state;
+    unsigned long h = HashGet(socketId, 0);
+    return wSockets[h].state;
 }
 
 void wSocketsSetPipe(SOCKET socketId, int* pipe) {
-    wSockets[hash(socketId)].pipe = pipe;
+    unsigned long h = HashGet(socketId, 0);
+    wSockets[h].pipe = pipe;
 }
 
 int* wSocketsGetPipe(SOCKET socketId) {
-    return wSockets[hash(socketId)].pipe;
+    unsigned long h = HashGet(socketId, 0);
+    return wSockets[h].pipe;
 }
 
 int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int bufferSize);
@@ -319,6 +391,11 @@ DLLEXPORT mint WolframLibrary_getVersion() {
     return WolframLibraryVersion;
 }
 
+void Segfault_Handler(int signo)
+{
+    fprintf(stderr,"\n[!] Oops! Segmentation fault...\n");
+}
+
 DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     #ifdef _WIN32
         int iResult; 
@@ -334,8 +411,8 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
 
     printf("[WolframLibrary_initialize]\r\ninitialized\r\n\r\n"); 
     sem_init(&mutex, 0, 1);
+    signal(SIGSEGV,Segfault_Handler);
     wQueryInit();
-    
     //sem_init(&mutex, 0, 1);
 
     return LIBRARY_NO_ERROR; 
@@ -465,39 +542,54 @@ DLLEXPORT int socketOpen(WolframLibraryData libData, mint Argc, MArgument *Args,
     iResult = getaddrinfo(host, port, &hints, &address);
     if (iResult != 0) {
         printf("[socketOpen]\r\ngetaddrinfo error: %d\r\n\r\n", iResult);
-        return LIBRARY_FUNCTION_ERROR;
+        MArgument_setInteger(Res, -1);
+        return LIBRARY_NO_ERROR;
     }
 
     listenSocket = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
     if (!ISVALIDSOCKET(listenSocket)) {
         printf("[socketOpen]\r\nsocket error: %d\r\n\r\n", (int)GETSOCKETERRNO());
         freeaddrinfo(address);
-        return LIBRARY_FUNCTION_ERROR;
+        MArgument_setInteger(Res, -1);
+        return LIBRARY_NO_ERROR;
     }
 
     iResult = bind(listenSocket, address->ai_addr, (int)address->ai_addrlen);
     if (iResult == SOCKET_ERROR) {
         printf("[socketOpen]\r\nbind error: %d\r\n\r\n", (int)GETSOCKETERRNO());
         CLOSESOCKET(listenSocket);
-        return LIBRARY_FUNCTION_ERROR;
+        MArgument_setInteger(Res, -1);
+        return LIBRARY_NO_ERROR;
     }
 
     iResult = listen(listenSocket, SOMAXCONN);
     if (iResult == SOCKET_ERROR) {
         printf("[socketOpen]\r\nerror during call listen(%d)\r\n\r\n", (int)listenSocket);
         CLOSESOCKET(listenSocket);
-        return LIBRARY_FUNCTION_ERROR;
+        MArgument_setInteger(Res, -1);
+        return LIBRARY_NO_ERROR;
     }
 
     #ifdef _WIN32 
     iResult = ioctlsocket(listenSocket, FIONBIO, &iMode); 
     #else
-    iResult = fcntl(listenSocket, O_NONBLOCK, &iMode); 
+    iResult = fcntl(listenSocket, O_NONBLOCK | SO_REUSEADDR, &iMode); 
+
+    //to prevent OS holding address after exit
+    int reuse = 1;
+    if (setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) < 0)
+        perror("setsockopt(SO_REUSEADDR) failed");
+
+    #ifdef SO_REUSEPORT
+        if (setsockopt(listenSocket, SOL_SOCKET, SO_REUSEPORT, (const char*)&reuse, sizeof(reuse)) < 0) 
+            perror("setsockopt(SO_REUSEPORT) failed");
+    #endif    
     #endif
 
     if (iResult != NO_ERROR) {
         printf("[socketOpen]\r\nioctlsocket failed with error: %d\r\n\r\n", iResult);
     } else {
+        HashAllocate(listenSocket, 0);
         wSocketsSet(listenSocket, 1);
     }
 
@@ -605,7 +697,9 @@ static void socketListenerTask(mint taskId, void* vtarg)
 
     BYTE* wbuffer;
 
-    numfds++;    
+    numfds++;  
+
+    int offset = numfds;  
     
     while(emergencyExit == 0 && libData->ioLibraryFunctions->asynchronousTaskAliveQ(taskId)) {
 	//while(libData->ioLibraryFunctions->asynchronousTaskAliveQ(taskId) && emergencyExit == 0)
@@ -621,6 +715,7 @@ static void socketListenerTask(mint taskId, void* vtarg)
                     if (ISVALIDSOCKET(clientSocket)) {
                         printf("[socketListenerTask]\r\nnew client: %d\r\n\r\n", (int)clientSocket);
 
+                        HashAllocate(clientSocket, 0);
                         wSocketsSet(clientSocket, 1);
                         wSocketsSetPipe(clientSocket, pipe);
                         
@@ -712,7 +807,9 @@ static void socketListenerTask(mint taskId, void* vtarg)
                         break;
 
                         case 'C':
+
                             wSocketsSet(cmd->socketId, INVALID_SOCKET);
+                            HashFree(cmd->socketId, 0);
                             CLOSESOCKET(cmd->socketId);
 
                             //looking for it in the pool...
@@ -778,12 +875,18 @@ static void socketListenerTask(mint taskId, void* vtarg)
     }
 
     printf("[socketListenerTask]\r\nremoveAsynchronousTask: %d\r\n\r\n", (int)taskId);
-    for (int i = 0; i < server->clientsLength; i++)
+    for (int i = offset; i < numfds; i++)
     {
-        printf("[socketListenerTask]\r\nclose client: %d\r\n\r\n", (int)server->clients[i]);
-        CLOSESOCKET(server->clients[i]);
-        wSocketsSet(server->clients[i], INVALID_SOCKET);
+        printf("[socketListenerTask]\r\nclose client: %d\r\n\r\n", (int) poll_set[i].fd);
+        CLOSESOCKET(poll_set[i].fd);
+        wSocketsSet(poll_set[i].fd, INVALID_SOCKET);
+        HashFree(poll_set[i].fd, 0);
     }
+
+    //close server
+    CLOSESOCKET(poll_set[0].fd);
+    wSocketsSet(poll_set[0].fd, INVALID_SOCKET);
+    HashFree(poll_set[0].fd, 0);
 
     //free(targ); 
     //free(server->clients);
@@ -897,6 +1000,7 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
 
         case BLOCKING_SOCKET:
             printf("[socketBinaryWrite]\r\n\tnot supported! %d\r\n\r\n", (int)SOCKET_ERROR);
+            return LIBRARY_NO_ERROR;  
         break;
 
 

@@ -23,6 +23,8 @@
         "__mutex_base": "c",
         "ostream": "c",
         "*.tcc": "c",
-        "locale": "c"
+        "locale": "c",
+        "chrono": "c",
+        "__locale": "c"
     }
 }
