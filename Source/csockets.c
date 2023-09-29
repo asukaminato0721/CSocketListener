@@ -264,7 +264,7 @@ void pipeBufData (uv_buf_t buf, uv_stream_t *client) {
 
 
 void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
-    printf("echo read\n");
+    //printf("echo read\n");
     if (nread > 0) {
         uv_buf_t b = uv_buf_init(buf->base, nread);
         pipeBufData(b, client);
@@ -354,7 +354,7 @@ void on_new_connection(uv_stream_t *server, int status) {
     uv_tcp_init(loop, c);
 
     if (uv_accept(server, (uv_stream_t*) c) == 0) {
-        printf("uv start reading");
+        //printf("uv start reading");
         uv_read_start((uv_stream_t*) c, alloc_buffer, echo_read);
     } else {
         printf("not accepted for %d", nclients);
