@@ -58,87 +58,130 @@ void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     buf->len = suggested_size;
 }
 
-#define HASH_TABLE_SIZE 494967
-#define HASH_SMALL_TABLE_SIZE 124856
+#define HASH_FREE -199
+#define HASH_NEXT 33
+#define HASH_OCCUPIED 71
 
-unsigned long hash_int_table_source[HASH_TABLE_SIZE];
-int hash_int_table[HASH_TABLE_SIZE];
-int hash_int_small_table[HASH_SMALL_TABLE_SIZE];
+typedef struct {
+    unsigned long stream;
+    long id;
 
+    int _flag;
+} uState_t;
 
-unsigned long hash_int(unsigned long key, unsigned long size){
+#define hashmap_size 16
+uState_t uState[hashmap_size];
 
+unsigned long hash(unsigned long key, unsigned int offset) {
+    if (offset < 0 || offset > 32) {
+        perror("offset hash table is way too big!");
+        //SLEEP(10*ms);
+        exit(-1);
+    }
     unsigned long knuth = 2654435769;
     unsigned long y = key;
-    return ((y * knuth) >> (32 - 0)) % size;
+    return ((y * knuth) >> (32 - offset)) % hashmap_size;
 }
 
-int hash_table_get(unsigned long key) {
-    unsigned long hash = hash_int(key, HASH_TABLE_SIZE);
-    if (hash_int_table[hash] == -2) {
-        hash = hash_int(key * 2654435761, HASH_SMALL_TABLE_SIZE);
-        return hash_int_small_table[hash];
+unsigned long HashAllocate(unsigned long socketId, int offset);
+
+void HashCopy(unsigned long socketId, int offsetSrc, int offsetDest) {
+    unsigned long hS = hash((unsigned long)socketId, offsetSrc);
+    printf("hash >> allocate for a copy\n");
+    unsigned long hD = HashAllocate((unsigned long)socketId, offsetDest);
+
+    printf("hash >> copied\n");
+
+    memcpy(&uState[hD], &uState[hS], sizeof(uState_t));
+}
+
+//helper functions to check the status of the socket
+unsigned long HashAllocate(unsigned long socketId, int offset) {
+    printf("hash >> allocate %ld with offset %ld\n", (unsigned long)socketId, offset);
+    unsigned long h = hash((unsigned long)socketId, offset);
+    printf("hash >> %ld\n", h);
+
+    if (uState[h]._flag == HASH_OCCUPIED) {
+        printf("hash >> collizion!\n");
+
+        //copy the original value
+        printf("hash >> copy old one %ld\n", (unsigned long)uState[h].stream);
+        HashCopy(uState[h].stream, offset, offset + 1);
+
+        uState[h]._flag = HASH_NEXT;
+        return HashAllocate(socketId, offset + 1);
     }
 
-    return hash_int_table[hash];
+    if (uState[h]._flag == HASH_NEXT) {
+        printf("hash >> next\n");
+        return HashAllocate(socketId, offset + 1);
+    }
+
+    printf("hash >> ok!\n");
+    uState[h]._flag = HASH_OCCUPIED;
+    uState[h].stream = (unsigned long)socketId;
+
+    return h;
 }
 
-void hash_table_init() {
-    for (int i=0; i<HASH_TABLE_SIZE; ++i)
-        hash_int_table[HASH_TABLE_SIZE] = -1;
-
-    for (int i=0; i<HASH_SMALL_TABLE_SIZE; ++i)
-        hash_int_small_table[HASH_SMALL_TABLE_SIZE] = -1;        
+void HashInit() {
+    for (int i=0; i<hashmap_size; ++i) {
+        uState[i]._flag = HASH_FREE;
+        uState[i].id = -1;
+    }
 }
 
-void hash_table_deoccupy(unsigned long key) {
-    unsigned long hash = hash_int(key, HASH_TABLE_SIZE);
-    if (hash_int_table[hash] == -2) {
-        hash = hash_int(key * 2654435761, HASH_SMALL_TABLE_SIZE);
-        hash_int_small_table[hash] = -1;
-        return;
-    } 
+void HashFree(unsigned long socketId, int offset) {
+    //printf("hash >> freeing %ld\n", (unsigned long)socketId);
+    unsigned long h = hash((unsigned long)socketId, offset);
+    if (uState[h]._flag == HASH_NEXT) {
+        return HashFree(socketId, offset + 1);
+    }
 
-    hash_int_table[hash] = -1;
-}
-
-void hash_table_occupy(unsigned long key, int value) {
-    unsigned long hash = hash_int(key, HASH_TABLE_SIZE);
-    unsigned long original = hash_int(key, HASH_TABLE_SIZE);
-
-    if (hash_int_table[hash] != -1) {
-        printf("hash collizion! Shit!\n");
-        printf("hash collizion! sHit!\n");
-        printf("hash collizion! shIt!\n");
-        printf("hash collizion! shiT!\n");
-        printf("ops...................\n");
-        
-
-        printf("moving the old one to a new table\n");
-        unsigned long newHash = hash_int(hash_int_table_source[hash] * 2654435761, HASH_SMALL_TABLE_SIZE);
-        hash_int_small_table[newHash] = hash_int_table[hash];
-
-        hash = hash_int(key * 2654435761, HASH_SMALL_TABLE_SIZE);
-        if (hash == newHash || hash_int_small_table[hash] > -1) {
-            printf("Sorry. it is again the same. Please, change the hash function ;()\n");
-            exit(-1);
-        }
-
-        hash_int_small_table[newHash] = value;     
-        hash_int_table[original] = -2;
-
+    if (uState[h]._flag == HASH_OCCUPIED) {
+        uState[h]._flag = HASH_FREE;
         return;
     }
 
-    hash_int_table[hash] = value;
+    //printf("hash >> already freed!\n");
+}
+
+unsigned long HashGet(unsigned long socketId, int offset) {
+    //printf("[HashGet] get\r\n\r\n");
+    unsigned long h = hash((unsigned long)socketId, offset);
+    if (uState[h]._flag == HASH_NEXT) {
+        //printf("[HashGet] next\r\n\r\n");
+        return HashGet(socketId, offset + 1);
+    }
+    //printf("[HashGet] done\r\n\r\n");
+
+    return h;
+}
+
+
+void uStateSet(unsigned long socketId, int state) {
+    unsigned long h = HashGet(socketId, 0);
+    if ((unsigned long)(uState[h].stream) != (unsigned long)socketId || uState[h]._flag == HASH_FREE) {
+        printf("[uGetState] probably it is gone already\r\n\r\n");
+        return;
+    }
+    uState[h].id = state;
 }
 
 int fetchClientId(uv_stream_t *client) {
-    return hash_table_get((unsigned long)client);
+    unsigned long h = HashGet((unsigned long)client, 0);
+    if ((unsigned long)(uState[h].stream) != (unsigned long)client) {
+        return -1;
+    }
+    return uState[h].id;
 }
 
 int fetchStreamId(uv_stream_t *s) {
-    return hash_table_get((unsigned long)s);
+    unsigned long h = HashGet((unsigned long)s, 0);
+    if ((unsigned long)(uState[h].stream) != (unsigned long)s) {
+        return -1;
+    }
+    return uState[h].id;
 }
 
 WolframIOLibrary_Functions ioLibrary;
@@ -177,9 +220,7 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     ioLibrary = libData->ioLibraryFunctions;
     numericLibrary = libData->numericarrayLibraryFunctions;
 
-    for (int i=0; i<HASH_TABLE_SIZE; ++i) {
-        hash_int_table[i] = -1;
-    }
+    HashInit();
 
     return 0;
 }
@@ -192,6 +233,10 @@ DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) {
 
 void pipeBufData (uv_buf_t buf, uv_stream_t *client) {
     int clientId = fetchClientId(client);
+    if (clientId < 0) {
+        printf("socket is broken!\r\n");
+        return;
+    }
     int streamId = fetchStreamId(clients[clientId].parent);
 
     mint dims[1]; 
@@ -233,12 +278,19 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
         //uv_close((uv_handle_t*) client, NULL);
         int uid = fetchClientId(client);
+        if (uid < 0) {
+            printf("socket is broken!\r\n");
+            free(buf->base);
+            return;
+        }
         printf("writeerror !\n");
         printf("making %d closed by the reading thread!\n", uid);
         if (uv_is_closing((uv_handle_t*) clients[uid].stream) == 0)
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;   
-        hash_table_deoccupy((unsigned long)clients[uid].stream);  
+        
+        uStateSet((unsigned long)clients[uid].stream, -1);
+        HashFree((unsigned long)clients[uid].stream, 0);
 
         //printf("we closed socket: %d ;)))\n", fetchClientId(client));
         //clients[fetchClientId(client)].state = 2;
@@ -290,7 +342,9 @@ void on_new_connection(uv_stream_t *server, int status) {
     uv_tcp_t *c = (uv_tcp_t*) malloc(sizeof(uv_tcp_t));
 
     
-    hash_table_occupy((uv_stream_t*)c, nclients);
+    //hash_table_occupy((uv_stream_t*)c, nclients);
+    HashAllocate((uv_stream_t*)c, 0);
+    uStateSet((uv_stream_t*)c, nclients);
 
     clients[nclients].stream = (uv_stream_t*)c;
     clients[nclients].parent = (uv_stream_t*)server;
@@ -307,7 +361,9 @@ void on_new_connection(uv_stream_t *server, int status) {
         clients[nclients].state = -1;
         if (uv_is_closing((uv_handle_t*) c) == 0)
             uv_close((uv_handle_t*) c, NULL);
-        hash_table_deoccupy((unsigned long)c);  
+        //hash_table_deoccupy((unsigned long)c);  
+        uStateSet((uv_stream_t*)c, -1);
+        HashFree((uv_stream_t*)c, 0);
     }
 }
 
@@ -354,7 +410,10 @@ DLLEXPORT int create_server(WolframLibraryData libData, mint Argc, MArgument *Ar
 
     findEmptyServersSlot();
 
-    hash_table_occupy((uv_stream_t*)s, nservers);
+    //hash_table_occupy((uv_stream_t*)s, nservers);
+    HashAllocate((uv_stream_t*)s, 0);
+    uStateSet((uv_stream_t*)s, nservers);
+
     servers[nservers].stream = (uv_stream_t*)s;
     servers[nservers].id = nservers;
     servers[nservers].state = 0;
@@ -370,7 +429,7 @@ DLLEXPORT int create_server(WolframLibraryData libData, mint Argc, MArgument *Ar
         return 1;
     }
 
-    printf("LISTEN SOCKET at %s:%d\n", listenAddrName, atoi(listenPortName)); 
+    printf("LISTEN unsigned long at %s:%d\n", listenAddrName, atoi(listenPortName)); 
 
     //MArgument_setInteger(Res, nservers); 
 
@@ -397,12 +456,18 @@ void echo_write(uv_write_t *req, int status) {
     //printf("echo write\n");
     if (status) {
         int uid = fetchClientId(req->handle);
+        if (uid < 0) {
+            printf("client hash is broken\r\n");
+            free_write_req(req);
+            return;
+        }
         printf("writeerror !\n");
         printf("making %d closed manually!\n", uid);
         if (uv_is_closing((uv_handle_t*) clients[uid].stream) == 0)
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;
-        hash_table_deoccupy((unsigned long)clients[uid].stream);       
+        uStateSet((unsigned long)clients[uid].stream, -1);
+        HashFree((unsigned long)clients[uid].stream, 0);     
     }
 
     //printf("free write req !\n");
@@ -501,7 +566,10 @@ DLLEXPORT int socket_write(WolframLibraryData libData, mint Argc, MArgument *Arg
         printf("Client %d is not writtable anymore!\n", clientId);
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
             uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
-        hash_table_deoccupy((unsigned long)clients[clientId].stream);  
+
+        uStateSet((unsigned long)clients[clientId].stream, -1);
+        HashFree((unsigned long)clients[clientId].stream, 0);
+ 
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
         return LIBRARY_NO_ERROR;
@@ -543,7 +611,10 @@ DLLEXPORT int socket_write_string(WolframLibraryData libData, mint Argc, MArgume
         printf("Client %d is not writtable anymore!\n", clientId);
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
             uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
-        hash_table_deoccupy((unsigned long)clients[clientId].stream);  
+        
+        uStateSet((unsigned long)clients[clientId].stream, -1);
+        HashFree((unsigned long)clients[clientId].stream, 0);
+
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
         return LIBRARY_NO_ERROR;
@@ -574,7 +645,9 @@ DLLEXPORT int close_socket(WolframLibraryData libData, mint Argc, MArgument *Arg
     if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
         uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
     clients[clientId].state = -1;  
-    hash_table_deoccupy((unsigned long)clients[clientId].stream);    
+
+    uStateSet((unsigned long)clients[clientId].stream, -1);
+    HashFree((unsigned long)clients[clientId].stream, 0);   
     
     MArgument_setInteger(Res, 0);
     return LIBRARY_NO_ERROR; 
