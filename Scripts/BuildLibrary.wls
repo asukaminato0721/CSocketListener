@@ -38,8 +38,8 @@ Block[{$directory, $libSrc, $libDir, $linkerOptions},
 		"TargetDirectory" -> $libDir, 
 		"Debug" -> True,
 		"Libraries" -> $libs,
-		"IncludeDirectories" -> {FileNameJoin[{$directory, "Source", "lib"}]}
-		(*,"CompileOptions"->{"-Og"}*),
+		"IncludeDirectories" -> {FileNameJoin[{$directory, "Source", "lib"}]},
+		"CompileOptions"->"-g",
 		"LinkerOptions"->OSLinker
 	]
 ]; 

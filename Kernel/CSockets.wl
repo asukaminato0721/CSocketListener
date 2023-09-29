@@ -46,8 +46,8 @@ CSocketObject[socketId_Integer]["DestinationPort"] :=
 socketPort[socketId]; 
 
 
-CSocketOpen[host_String: "localhost", port_Integer] := 
-CSocketObject[socketOpen[host, ToString[port]]]; 
+CSocketOpen[host_String: "localhost", port_Integer] := (task;
+CSocketObject[socketOpen[host, ToString[port]]]); 
 
 
 CSocketOpen[address_String] /; 
@@ -87,16 +87,24 @@ socketReadyQ[socketId];
 CSocketObject /: Close[CSocketObject[socketId_Integer]] := 
 socketClose[socketId]; 
 
+router[task_, event_, {serverId_, clientId_, data_}] := (
+	router[serverId][toPacket[task, event, {serverId, clientId, data}]]
+)
+
+task := (task = True; Internal`CreateAsynchronousTask[startLoop, {0}, router[##]&]); 
 
 CSocketObject /: SocketListen[socket: CSocketObject[socketId_Integer], handler_, OptionsPattern[{SocketListen, "BufferSize" -> $bufferSize}]] := 
-Module[{task}, 
-	task = Internal`CreateAsynchronousTask[socketListen, {socketId, OptionValue["BufferSize"]}, handler[toPacket[##]]&]; 
+Module[{id}, 
+	task;
+	id = socketListen[socketId, OptionValue["BufferSize"]];
+	router[id] = handler;
+
 	CSocketListener[<|
 		"Socket" -> socket, 
 		"Host" -> socket["DestinationHostname"], 
 		"Port" -> socket["DestinationPort"], 
 		"Handler" -> handler, 
-		"TaskId" -> task[[2]], 
+		"TaskId" -> id, 
 		"Task" -> task
 	|>]
 ]; 
@@ -141,6 +149,8 @@ socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integ
 
 
 socketClose = LibraryFunctionLoad[$libFile, "socketClose", {Integer}, Integer]; 
+
+startLoop = LibraryFunctionLoad[$libFile, "startLoop", {Integer}, Integer]; 
 
 
 socketListen = LibraryFunctionLoad[$libFile, "socketListen", {Integer, Integer}, Integer]; 

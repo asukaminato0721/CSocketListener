@@ -11,6 +11,8 @@
 uv_loop_t *uvloop;
 uv_async_t poke;
 
+mint asyncObjGlobal;
+
 static uv_mutex_t mutex;
 
 //global objects to be accessed from everywhere
@@ -34,11 +36,10 @@ typedef struct {
     char* host;
     char* port;
 
-    uv_stream_t* stream;
-
     mint asyncObjID;
+    long length;
 
-    uv_buf_t buf;
+    char* buf;
 } packet_t;
 
 packet_t* que[128];
@@ -55,8 +56,6 @@ int r_cursor = 0;
 typedef struct {
     SOCKET socketId;
     SOCKET serverId;
-
-    uv_stream_t* stream;
     
     int state;
 
@@ -192,8 +191,10 @@ void pipeInit(packet_t* p) {
 }
 
 int pipePush(packet_t* p) {
+    uv_sleep(1000);
+    printf("[pipePush] cursor: %d\r\n", w_cursor);
     uv_mutex_lock(&mutex);
-    printf("[pipePush] \r\n");
+    //printf("[pipePush] after mutex \r\n");
     que[w_cursor] = p;
 
     w_cursor++;
@@ -201,16 +202,41 @@ int pipePush(packet_t* p) {
 
     printf("[pipePush] uv_async_send\r\n");
     
-    uv_async_send(&poke);
-
+    //
+  
+    //printf("[pipePush] before unlock mutex\r\n");
     uv_mutex_unlock(&mutex);
+
+    //uv_async_send(&poke);
+    uv_async_t *message = (uv_async_t*)malloc(sizeof(uv_async_t));
+    uv_async_init(uvloop, message, async_handleQue);
+    uv_async_send(message);     
+    //printf("[pipePush] after unlock mutex\r\n");
     return 0;
 }
 
 packet_t* pipePop() {
+    uv_sleep(1000);
+    printf("[pipePop] cursor: %d\r\n", r_cursor);
+    //printf("[pipePop] before mutex\r\n");
     uv_mutex_lock(&mutex);
-    printf("[pipePop] \r\n");
-    if (r_cursor == w_cursor) return 0;
+    //printf("[pipePop] after mutex\r\n");
+    if (r_cursor == w_cursor) {
+        //printf("[pipePop] before mutex unlock\r\n");
+        if (que[r_cursor] != 0) {
+            printf("fatal error!\r\n");
+            exit(-1);
+        }
+
+        uv_mutex_unlock(&mutex);
+        //printf("[pipePop] after mutex unlock\r\n");        
+        return 0;
+    }
+
+    if (r_cursor > w_cursor) {
+        printf("fatal error racing!\r\n");
+        exit(-1);
+    }
     
 
     printf("[pipePop] something is there \r\n");
@@ -219,7 +245,10 @@ packet_t* pipePop() {
 
     r_cursor++;
     if (r_cursor > 127) r_cursor = 0;
+
+    //printf("[pipePop] before mutex unlock\r\n");
     uv_mutex_unlock(&mutex);
+    //printf("[pipePop] after mutex unlock\r\n");
     return r;
 }
 
@@ -237,7 +266,6 @@ void pipe_buf (uv_stream_t *client, const uv_buf_t *buf) {
     uState_t *srv = uGetState(cli->serverId);
 
     SOCKET serverId = cli->serverId;
-    mint asyncId = srv->serverId;
 
     mint dims[1]; 
     MNumericArray data;
@@ -253,13 +281,16 @@ void pipe_buf (uv_stream_t *client, const uv_buf_t *buf) {
     ioLibrary->DataStore_addInteger(ds, clientId);
     ioLibrary->DataStore_addMNumericArray(ds, data);
 
-    printf("[pipe_buf] raise async event %ld\r\n", asyncId);
+    printf("[pipe_buf] raise async event %ld\r\n", asyncObjGlobal);
     //printf("raise async event %d for server %d and client %d\n", asyncObjID, streamId, clientId);
-    ioLibrary->raiseAsyncEvent(asyncId, "RECEIVED_BYTES", ds);
+    ioLibrary->raiseAsyncEvent(asyncObjGlobal, "Received", ds);
+
+    //free(buf->base);
 }
 
 void async_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
     printf("[async_read]\r\n");
+    uv_sleep(1000);
 
     if (nread < 0) {
         if (nread != UV_EOF) {
@@ -272,7 +303,7 @@ void async_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
 
     if (buf->base) {
         printf("[pipe_buf] free buffer\r\n");
-        free(buf->base);
+        //free(buf->base);
     }
 }
 
@@ -291,7 +322,6 @@ void on_new_connection(uv_stream_t *server, int status) {
         unsigned long h = HashAllocate(c, 0);
         uState[h].serverId = (SOCKET)server;
         uState[h].socketId = (SOCKET)c;
-        uState[h].stream = c;
         uState[h].state = U_VALID;
 
         uv_read_start((uv_stream_t*) c, alloc_buffer, async_read);
@@ -304,47 +334,63 @@ void on_new_connection(uv_stream_t *server, int status) {
 
 void socket_open(void* p) {
     printf("[socket_open] enter\r\n");
-    uv_tcp_t* s = (uv_tcp_t*)((packet_t*)p)->stream;
+    uv_tcp_t* s = (uv_tcp_t*)((packet_t*)p)->socket;
+    printf("[socket_open] assigned\r\n");
     uv_tcp_init(uvloop, s);
+    printf("[socket_open] initiated\r\n");
     struct sockaddr_in* addr = (struct sockaddr_in*)malloc(sizeof(struct sockaddr_in));
+    printf("[socket_open] ip\r\n");
     uv_ip4_addr(((packet_t*)p)->host, atoi(((packet_t*)p)->port), addr);
+    printf("[socket_open] bind\r\n");
     int result = uv_tcp_bind(s, (const struct sockaddr*)addr, 0);
+    printf("[socket_open] ok\r\n");
     if (result) {
         printf("[socket_open] bind error %s @ %s:%s\r\n", uv_strerror(result), ((packet_t*)p)->host, ((packet_t*)p)->port);
     }
 
+    printf("[socket_open] has alloc\r\n");
     HashAllocate(((packet_t*)p)->socket, 0);
 
     uState_t *st = uGetState(((packet_t*)p)->socket);
     st->socketId = ((packet_t*)p)->socket;
-    st->stream = s;
 
     st->state = U_VALID;
     
 
 
-    free(((packet_t*)p)->host);
-    free(((packet_t*)p)->port);
+    //free(((packet_t*)p)->host);
+    //free(((packet_t*)p)->port);
+}
+
+void free_write_req(uv_write_t *req) {
+    write_req_t *wr = (write_req_t*) req;
+    //Here it fucks up
+    free(wr->buf.base);
+    free(wr);
 }
 
 void async_write(uv_write_t* wreq, int status) {
   printf("[async_write] \r\n");
   if (status) {
     fprintf(stderr, "uv_write error: %s\n", uv_err_name(status));
-    //free(wreq);
+    
+    free_write_req(wreq);
     return;
   }
 
   printf("[async_write] ok!\r\n");
 
-  //free(wreq);
+  free_write_req(wreq);
 }
 
 void socket_write(void* p) {
     printf("[socket_write] enter\r\n");
 
-    uv_write_t req;
-    uv_write(&req, ((packet_t*)p)->stream, &((packet_t*)p)->buf, 1, async_write);
+
+    write_req_t *req = (write_req_t*) malloc(sizeof(write_req_t));
+    req->buf = uv_buf_init(((packet_t*)p)->buf, ((packet_t*)p)->length);
+
+    uv_write((uv_write_t*) req, (uv_stream_t*)((packet_t*)p)->socket, &req->buf, 1, async_write);
 }
 
 void socket_listen(void* p) {
@@ -353,7 +399,7 @@ void socket_listen(void* p) {
     st->serverId = ((packet_t*)p)->asyncObjID;
 
     
-    uv_tcp_t* s = (uv_tcp_t*)st->stream;
+    uv_tcp_t* s = (uv_tcp_t*)((packet_t*)p)->socket;
     int result = uv_listen((uv_stream_t*) s, 128, on_new_connection);
     if (result) {
         printf("[socket_listen] Listen error %s\n", uv_strerror(result));
@@ -369,11 +415,12 @@ void async_handleQue(uv_async_t* async, int status) {
     while((p = pipePop()) != 0) {
         printf("[async_handleQue] processing... \r\n");
         (*p->ref)(p);
-        free(p);
+        //free(p);
     }
 
     printf("[async_handleQue] close\r\n");
     uv_close((uv_handle_t*) async, NULL);
+    printf("[async_handleQue] done\r\n");
 }
 
 DLLEXPORT mint WolframLibrary_getVersion() {
@@ -387,32 +434,33 @@ void Segfault_Handler(int signo)
     exit(-1);
 }
 
-static void uvLoop(void* vtarg)
+static void uvLoop(mint asyncObjID, void* vtarg)
 {
     printf("[uvLoop] Event-Loop started! \n");
-    uvloop = uv_default_loop();
-    uv_async_init(uvloop, &poke, async_handleQue); 
+    
     uv_run(uvloop, UV_RUN_DEFAULT);
+
+    printf("[uvLoop] you should not be here!!!! \n");
 }
-
-
 
 DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     printf("[WolframLibrary_initialize]\r\ninitialized\r\n\r\n"); 
-    //signal(SIGSEGV,Segfault_Handler);
+    signal(SIGSEGV,Segfault_Handler);
 
     printf("[WolframLibrary_initialize] creating uv task...\n");
 
-    ioLibrary = libData->ioLibraryFunctions; 
-    numericLibrary = libData->numericarrayLibraryFunctions;
+    
 
     uv_mutex_init(&mutex);
 
     HashInit();
+
+    uvloop = uv_default_loop();
+    uv_async_init(uvloop, &poke, async_handleQue); 
     
     //ioLibrary->createAsynchronousTaskWithThread(uvLoop, NULL);   
-    uv_thread_t threads[1];
-    uv_thread_create(&threads[0], uvLoop, NULL);    
+   // uv_thread_t threads[1];
+    //uv_thread_create(&threads[0], uvLoop, NULL);    
 
     return LIBRARY_NO_ERROR; 
 }
@@ -420,8 +468,8 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
 DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) { 
     printf("[WolframLibrary_uninitialize]\r\nuninitialized\r\n\r\n"); 
 
-    //uv_stop(uvloop);
-    uv_loop_close(uvloop);
+    uv_stop(uvloop);
+    //uv_loop_close(uvloop);
 
     return; 
 }
@@ -435,12 +483,11 @@ DLLEXPORT int socketOpen(WolframLibraryData libData, mint Argc, MArgument *Args,
 
     packet_t* packet = (packet_t*)malloc(sizeof(packet));
     packet->ref = &socket_open;
-    packet->stream = s;
     packet->socket = (SOCKET)s;
-    packet->host = (char*)malloc(sizeof(char)*strlen(host));
-    memcpy(packet->host,  host, sizeof(char)*strlen(host));
-    packet->port = (char*)malloc(sizeof(char)*strlen(port));
-    memcpy(packet->port,  port, sizeof(char)*strlen(port));    
+    packet->host = "127.0.0.1";
+    //memcpy(packet->host,  host, sizeof(char)*(strlen(host)+1));
+    packet->port = "8010";
+    //memcpy(packet->port,  port, sizeof(char)*(strlen(port)+1));    
 
     pipePush(packet);
 
@@ -457,13 +504,24 @@ DLLEXPORT int socketClose(WolframLibraryData libData, mint Argc, MArgument *Args
     return LIBRARY_NO_ERROR; 
 }
 
-static void dummy(mint asyncObjID, void* vtarg)
-{
-    
-    while(1) {
-        printf("dummy ;0\r\n");
-        uv_sleep(1000000);
-    }
+typedef struct SocketTaskArgs_st {
+    WolframNumericArrayLibrary_Functions numericLibrary;
+    WolframIOLibrary_Functions ioLibrary;
+    mint garbage; 
+}* SocketTaskArgs; 
+
+DLLEXPORT int startLoop(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
+
+    printf("[socketListen]\r\n");
+    SocketTaskArgs threadArg = (SocketTaskArgs)malloc(sizeof(struct SocketTaskArgs_st));
+    mint asyncObjID = libData->ioLibraryFunctions->createAsynchronousTaskWithThread(uvLoop, threadArg);
+    ioLibrary = libData->ioLibraryFunctions; 
+    numericLibrary = libData->numericarrayLibraryFunctions;
+
+    asyncObjGlobal = asyncObjID;
+
+    MArgument_setInteger(Res, asyncObjID); 
+    return LIBRARY_NO_ERROR; 
 }
 
 DLLEXPORT int socketListen(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
@@ -471,16 +529,16 @@ DLLEXPORT int socketListen(WolframLibraryData libData, mint Argc, MArgument *Arg
 
     printf("[socketListen]\r\n");
 
-    mint asyncObjID = ioLibrary->createAsynchronousTaskWithThread(dummy, NULL);
+    //mint asyncObjID = ioLibrary->createAsynchronousTaskWithThread(dummy, NULL);
 
     packet_t* packet = (packet_t*)malloc(sizeof(packet));
     packet->ref = &socket_listen;
     packet->socket = listenSocket;  
-    packet->asyncObjID = asyncObjID;
+    packet->asyncObjID = 0;
 
     pipePush(packet);
 
-    MArgument_setInteger(Res, asyncObjID); 
+    MArgument_setInteger(Res, listenSocket); 
     return LIBRARY_NO_ERROR; 
 }
 
@@ -517,10 +575,9 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     packet_t* packet = (packet_t*)malloc(sizeof(packet));
     packet->ref = &socket_write;
     packet->socket = clientId;
-    packet->stream = st->stream;
-    packet->buf = uv_buf_init(copy, dataLength);;
+    packet->buf = copy;
 
-    pipePush(packet);
+    //pipePush(packet);
     
     MArgument_setInteger(Res, dataLength);
     return LIBRARY_NO_ERROR;
