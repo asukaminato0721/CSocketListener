@@ -42,20 +42,19 @@ Begin["`Private`"];
 (*Implementation*)
 
 
-CSocketObject[socketId_Integer]["DestinationPort"] := 
-socketPort[socketId]; 
 
 
-CSocketOpen[host_String: "localhost", port_Integer] := (task;
-CSocketObject[socketOpen[host, ToString[port]]]); 
+CSocketOpen[host_String: "127.0.0.1", port_Integer] := (task;
+CSocketObject[host, port // ToString]); 
+
+CSocketOpen[hostport_String: "127.0.0.1"] := (task;
+With[{port = StringSplit[addr,":"]//Last, host = StringSplit[addr,":"]//First},
+	CSocketObject[host, port]
+]
+); 
 
 
-CSocketOpen[address_String] /; 
-StringMatchQ[address, __ ~~ ":" ~~ NumberString] := 
-CSocketObject[Apply[socketOpen, StringSplit[address, ":"]]]; 
-
-
-CSocketConnect[host_String: "localhost", port_Integer] := 
+CSocketConnect[host_String: "127.0.0.1", port_Integer] := 
 CSocketObject[socketConnect[host, ToString[port]]]; 
 
 
@@ -88,21 +87,20 @@ CSocketObject /: Close[CSocketObject[socketId_Integer]] :=
 socketClose[socketId]; 
 
 router[task_, event_, {serverId_, clientId_, data_}] := (
+	Print["recv"];
 	router[serverId][toPacket[task, event, {serverId, clientId, data}]]
 )
 
-task := (task = True; Internal`CreateAsynchronousTask[startLoop, {0}, router[##]&]); 
+task := (task = True; Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&];); 
 
-CSocketObject /: SocketListen[socket: CSocketObject[socketId_Integer], handler_, OptionsPattern[{SocketListen, "BufferSize" -> $bufferSize}]] := 
-Module[{id}, 
-	task;
-	id = socketListen[socketId, OptionValue["BufferSize"]];
-	router[id] = handler;
+CSocketObject /: SocketListen[CSocketObject[host_String, port_String], handler_] := 
+Module[{sid}, 
+	sid = createServer[host, port];
+	Echo["Created server with sid: "<>ToString[sid]];
+	router[sid] = handler;
 
 	CSocketListener[<|
 		"Socket" -> socket, 
-		"Host" -> socket["DestinationHostname"], 
-		"Port" -> socket["DestinationPort"], 
 		"Handler" -> handler, 
 		"TaskId" -> id, 
 		"Task" -> task
@@ -144,38 +142,38 @@ toPacket[task_, event_, {serverId_, clientId_, data_}] :=
 	"DataByteArray" -> ByteArray[data]
 |>; 
 
+(*
+socketOpen = LibraryFunctionLoad[$libFile, "socket_open", {String, String}, Integer]; 
+*)
 
-socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
+socketClose = LibraryFunctionLoad[$libFile, "close_socket", {Integer}, Integer]; 
 
-
-socketClose = LibraryFunctionLoad[$libFile, "socketClose", {Integer}, Integer]; 
-
-startLoop = LibraryFunctionLoad[$libFile, "startLoop", {Integer}, Integer]; 
-
-
-socketListen = LibraryFunctionLoad[$libFile, "socketListen", {Integer, Integer}, Integer]; 
+runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]; 
 
 
+createServer = LibraryFunctionLoad[$libFile, "create_server", {String, String}, Integer]; 
+
+(*
 socketListenerTaskRemove = LibraryFunctionLoad[$libFile, "socketListenerTaskRemove", {Integer}, Integer]; 
 
 
-socketConnect = LibraryFunctionLoad[$libFile, "socketConnect", {String, String}, Integer]; 
+socketConnect = LibraryFunctionLoad[$libFile, "socketConnect", {String, String}, Integer]; *)
 
 
-socketBinaryWrite = LibraryFunctionLoad[$libFile, "socketBinaryWrite", {Integer, "ByteArray", Integer, Integer}, Integer]; 
+socketBinaryWrite = LibraryFunctionLoad[$libFile, "socket_write", {Integer, "ByteArray", Integer, Integer}, Integer]; 
 
 
-socketWriteString = LibraryFunctionLoad[$libFile, "socketWriteString", {Integer, String, Integer, Integer}, Integer]; 
+socketWriteString = LibraryFunctionLoad[$libFile, "socket_write_string", {Integer, String, Integer, Integer}, Integer]; 
 
 
-socketReadyQ = LibraryFunctionLoad[$libFile, "socketReadyQ", {Integer}, True | False]; 
+(*socketReadyQ = LibraryFunctionLoad[$libFile, "socketReadyQ", {Integer}, True | False]; 
 
 
 socketReadMessage = LibraryFunctionLoad[$libFile, "socketReadMessage", {Integer, Integer}, "ByteArray"]; 
 
 
 socketPort = LibraryFunctionLoad[$libFile, "socketPort", {Integer}, Integer]; 
-
+*)
 
 (* ::Section:: *)
 (*End private context*)
