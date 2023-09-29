@@ -329,6 +329,7 @@ void findEmptyServersSlot() {
 }
 
 void on_new_connection(uv_stream_t *server, int status) {
+    
     if (status < 0) {
         fprintf(stderr, "New connection error %s\n", uv_strerror(status));
         // error!

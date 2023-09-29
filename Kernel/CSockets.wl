@@ -108,10 +108,6 @@ Module[{sid},
 ]; 
 
 
-CSocketListener /: DeleteObject[CSocketListener[assoc_Association]] := 
-socketListenerTaskRemove[assoc["TaskId"]]; 
-
-
 (* ::Section:: *)
 (*Internal*)
 
