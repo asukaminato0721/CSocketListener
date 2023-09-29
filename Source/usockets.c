@@ -94,21 +94,27 @@ typedef struct {
 } wQuery_t;
 
 typedef struct {
+    wQuery_t* wQuery[1024];
+    int cursor;
+} wStack_t;
+
+typedef struct {
     char type;
     SOCKET socketId;
     unsigned long payload;
 } pipePacket_t;
 
 //just a stack
-#define wQuery_size 2048
+
 
 typedef struct {
     SOCKET socketId;
     int state;
     int skip; 
+    int trials;
     int *pipe;
 
-    wQuery_t** wQuery;
+    wStack_t* wStack;
 
     int _flag;
 } wSocket_t;
@@ -125,6 +131,7 @@ wSocket_t wSockets[hashmap_size];
 unsigned long hash(unsigned long key, unsigned int offset) {
     if (offset < 0 || offset > 32) {
         perror("offset hash table is way too big!");
+        //SLEEP(10*ms);
         exit(-1);
     }
     unsigned long knuth = 2654435769;
@@ -132,89 +139,79 @@ unsigned long hash(unsigned long key, unsigned int offset) {
     return ((y * knuth) >> (32 - offset)) % hashmap_size;
 }
 
+
+
 //Push to the writting stack
-void wQueryPush(wQuery_t* q, wQuery_t **wQuery) {
+void wQueryPush(wQuery_t* q, wStack_t *wStack) {
     //randomly start
     //long init = rand() % wQuery_size;
     //sem_wait(&sem);
-    // pthread_mutex_lock(&m);
-    //printf("[wquery]\r\n\tfirst push\r\n\r\n");
-    for (unsigned long i=0; i<wQuery_size; ++i) {
-        //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
-        if (wQuery[i] == 0) {
-            wQuery[i] = q;
-            //sem_post(&sem);
-             //pthread_mutex_unlock(&m);
-            return;
-        }
-    }
+    sem_wait(&mutex);
+    printf("[wQuery] cursor %d\r\n\r\n", wStack->cursor);
+    wStack->cursor++;
+    wStack->wQuery[wStack->cursor] = q;
 
-    //printf("[wquery]\r\n\tsecond push\r\n\r\n");
-    /*for (long i=init; i>=0; --i) {
-        //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
-        if (wQuery[i] == NULL) {
-            wQuery[i] = q;
-            //sem_post(&sem);
-            //pthread_mutex_unlock(&m);
-            return;
-        }
-    }   */ 
+    sem_post(&mutex);
     
 }
 
 //Check if something in the writting stack
-int wQueryQ(wQuery_t **wQuery) {
-    for (long i=0; i<wQuery_size; ++i) {
-        if (wQuery[i] != 0) {
-            return 0;
-        }
+int wQueryQ(wStack_t *wStack) {
+    //sem_wait(&mutex);
+    printf("[wQueryQ]\r\n\checking\r\n\r\n");
+    printf("[wQuery] cursor %d\r\n\r\n", wStack->cursor);
+    if (wStack->cursor >= 0) { 
+        printf("[wQueryQ]\r\n\found\r\n\r\n");
+        sem_post(&mutex);
+        return 0;
     }
+
+    sem_post(&mutex);
 
     return -1;
 }
 
-//Init writting stack
-void wQueryInit(wQuery_t **wQuery) {
-    for (unsigned long i=0; i<wQuery_size; ++i) {
-        wQuery[i] = 0;
-    }
-}
+
 
 //Pop something from writting stack
-wQuery_t* wQueryPop(wQuery_t **wQuery) {
+wQuery_t* wQueryPop(wStack_t *wStack) {
+    //sem_wait(&mutex);
     wQuery_t* res = 0;
     //randomly start
-    //long init = rand() % wQuery_size;
-
-    //printf("[wquery]\r\n\tinitial %d\r\n\r\n", init);
-    //sem_wait(&sem);
-    //pthread_mutex_lock(&m);
-    //printf("[wquery]\r\n\tfirst pop\r\n\r\n");
-    for (unsigned long i=0; i<wQuery_size; ++i) {
-        //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
-        if (wQuery[i] != 0) {
-            res =  wQuery[i];
-            wQuery[i] = 0;
-            break;
-        }
+    printf("[wQueryPop] pop\r\n\r\n");
+    printf("[wQuery] cursor %d\r\n\r\n", wStack->cursor);
+    
+    res = wStack->wQuery[0];
+    for (int i=1; i<wStack->cursor; ++i) {
+        wStack->wQuery[i-1] = wStack->wQuery[i];
     }
 
-    /*if (res == NULL) {
-        //printf("[wquery]\r\n\second pop\r\n\r\n");
-        for (long i=init; i>=0; --i) {
-            //printf("[wquery]\r\n\tcheking... %d\r\n\r\n", i);
-            if (wQuery[i] != NULL) {
-                res =  wQuery[i];
-                wQuery[i] = NULL;
-                break;
-            }
-        }        
-    }*/
+    wStack->cursor--;
 
-    //sem_post(&sem);
-    //pthread_mutex_unlock(&m);
+    sem_post(&mutex);
+
+
 
     return res;
+}
+
+void wQueryUnshift(wQuery_t* q, wStack_t *wStack) {
+    //sem_wait(&mutex);
+
+    //randomly start
+    printf("[wQuery] cursor %d\r\n\r\n", wStack->cursor);
+    printf("[wQueryUnshft] unshift\r\n\r\n");
+    
+
+    for (int i=wStack->cursor; i<=1; ++i) {
+        wStack->wQuery[i] = wStack->wQuery[i-1];
+    }
+
+    wStack->wQuery[0] = q;
+
+    wStack->cursor++;
+
+    sem_post(&mutex);
 }
 
 unsigned long HashAllocate(SOCKET socketId, int offset);
@@ -258,6 +255,14 @@ unsigned long HashAllocate(SOCKET socketId, int offset) {
     return h;
 }
 
+void HashInit() {
+    for (int i=0; i<hashmap_size; ++i) {
+        wSockets[i].skip = 0;
+        wSockets[i].trials = 0;
+        wSockets[i]._flag = HASH_FREE;
+    }
+}
+
 void HashFree(SOCKET socketId, int offset) {
     printf("hash >> freeing %ld\n", socketId);
     unsigned long h = hash(socketId, offset);
@@ -274,15 +279,19 @@ void HashFree(SOCKET socketId, int offset) {
 }
 
 unsigned long HashGet(SOCKET socketId, int offset) {
+    printf("[HashGet] get\r\n\r\n");
     unsigned long h = hash(socketId, offset);
     if (wSockets[h]._flag == HASH_NEXT) {
+        printf("[HashGet] next\r\n\r\n");
         return HashGet(socketId, offset + 1);
     }
+    printf("[HashGet] done\r\n\r\n");
 
     return h;
 }
 
 void wSocketsSet(SOCKET socketId, int state) {
+    //sem_wait(&mutex);
     unsigned long h = HashGet(socketId, 0);
     if (wSockets[h].socketId != socketId) {
         printf("Cannot set the state of a wrong socket %ld!\r\n", socketId);
@@ -291,56 +300,92 @@ void wSocketsSet(SOCKET socketId, int state) {
     }
     wSockets[h].state = state;
     wSockets[h].skip = 0;
+    sem_post(&mutex);
 }
 
 
 
 void wSocketsSubtractSkipping(SOCKET socketId) {
+    //sem_wait(&mutex);
+    printf("[wSocketsSubtractSkipping] hash get\r\n\r\n");
     unsigned long h = HashGet(socketId, 0);
     wSockets[h].skip -= 1;
+    sem_post(&mutex);
 }
 
 void wSocketsAddSkipping(SOCKET socketId) {
+    //sem_wait(&mutex);
+    printf("[wSocketsAddSkipping] hash get\r\n\r\n");
     unsigned long h = HashGet(socketId, 0);
-    wSockets[h].skip += 70;
+    printf("[wSocketsAddSkipping] adding skip\r\n\r\n");
+    wSockets[h].skip += (70 +  wSockets[h].trials * 70);
+    wSockets[h].trials += 1;
+    sem_post(&mutex);
+}
+
+void wSocketsResetSkipping(SOCKET socketId) {
+    //sem_wait(&mutex);
+    unsigned long h = HashGet(socketId, 0);
+    wSockets[h].trials = 0;
+    sem_post(&mutex);
 }
 
 int wSocketsCheckSkipping(SOCKET socketId) {
+    //sem_wait(&mutex);
     unsigned long h = HashGet(socketId, 0);
-    return wSockets[h].skip;
+    int skip = wSockets[h].skip;
+    sem_post(&mutex);
+    return skip;
 }
 
 int wSocketsGetState(SOCKET socketId) {
+    //sem_wait(&mutex);
     unsigned long h = HashGet(socketId, 0);
-    if (wSockets[h].socketId != socketId) return INVALID_SOCKET;
-    return wSockets[h].state;
+    if (wSockets[h].socketId != socketId) {
+        sem_post(&mutex);
+        return INVALID_SOCKET;
+    }
+    int state = wSockets[h].state;
+    sem_post(&mutex);
+
+    return state;
 }
 
 void wSocketsSetPipe(SOCKET socketId, int* pipe) {
+    //sem_wait(&mutex);
     unsigned long h = HashGet(socketId, 0);
     wSockets[h].pipe = pipe;
+    sem_post(&mutex);
 }
 
 int* wSocketsGetPipe(SOCKET socketId) {
+    //sem_wait(&mutex);
     unsigned long h = HashGet(socketId, 0);
-    return wSockets[h].pipe;
+    int* p = wSockets[h].pipe;
+    sem_post(&mutex);
+    return p;
 }
 
-void wSocketsSetwQuery(SOCKET socketId, wQuery_t **wQuery) {
+void wSocketsSetwStack(SOCKET socketId, wStack_t *wStack) {
+    //sem_wait(&mutex);
     unsigned long h = HashGet(socketId, 0);
-    wSockets[h].wQuery = wQuery;
+    wSockets[h].wStack = wStack;
+    sem_post(&mutex);
 }
 
-wQuery_t ** wSocketsGetwQuery(SOCKET socketId) {
+wStack_t * wSocketsGetwStack(SOCKET socketId) {
+    //sem_wait(&mutex);
     unsigned long h = HashGet(socketId, 0);
-    return wSockets[h].wQuery;
+    wStack_t * w = wSockets[h].wStack;
+    sem_post(&mutex);
+    return w;
 }
 
 int socketWrite(SOCKET socketId, BYTE *buf, unsigned long dataLength, int bufferSize);
 
 
 //push to the stack a task to write data to the socket
-void addToWriteQuery(SOCKET socketId, BYTE *buf, unsigned long dataLength, wQuery_t **wQuery) {
+void addToWriteQuery(SOCKET socketId, BYTE *buf, unsigned long dataLength, wStack_t *stack) {
     wQuery_t* query;
 
     printf("[wquery]\r\n\tadded to the query\r\n\r\n");
@@ -350,58 +395,76 @@ void addToWriteQuery(SOCKET socketId, BYTE *buf, unsigned long dataLength, wQuer
     query->buf = (BYTE*)malloc(sizeof(BYTE)*dataLength);
     //make a copy, since WL frees all memory
     memcpy((void*) query->buf, (void*)buf, sizeof(BYTE)*dataLength);
-    wQueryPush(query, wQuery);
+    wQueryPush(query, stack);
 }
 
 //check the stack
-int pokeWriteQuery(wQuery_t **wQuery) {
+int pokeWriteQuery(wStack_t *wStack) {
     //a fence to block the operations with the stack
-    //sem_wait(&mutex);
+    ////sem_wait(&mutex);
 
     //if there is something
-    if (wQueryQ(wQuery) < 0) return -1;
-    //printf("[wquery]\r\n\tchecking...\r\n\r\n");
+    if (wQueryQ(wStack) < 0) return -1;
+    printf("[wquery]\r\n\tchecking...\r\n\r\n");
 
     //pop
-    wQuery_t* ptr = wQueryPop(wQuery);
-    //printf("[wquery]\r\n\tpopped...\r\n\r\n");
+    wQuery_t* ptr = wQueryPop(wStack);
+    printf("[wquery]\r\n\tpopped...\r\n\r\n");
     //just in case
-    if (ptr == 0) return ST_NEXT;
 
     //skip if it is a delayed message
-    if (wSocketsCheckSkipping(ptr->socket) > 0) {
-        printf("[wquery]\r\n\tskipping...\r\n\r\n");
+    int skipping = wSocketsCheckSkipping(ptr->socket);
+    if (skipping > 0 && skipping < 3000) {
+        printf("[wquery]\r\n\tskipping left %d\r\n\r\n", skipping);
         //decreate the counter
+        printf("[wquery]\r\n\t subtracting\r\n\r\n");
         wSocketsSubtractSkipping(ptr->socket);
         //put it back
-        wQueryPush(ptr, wQuery);
-        //I DO NOT LIKE IT
-        //SLEEP(ms);
+        printf("[wquery]\r\n\t push it back\r\n\r\n");
+        wQueryUnshift(ptr, wStack);
+        printf("[wquery]\r\n\t return\r\n\r\n");    
+
         return ST_WAIT;
     }
 
-    //now we can finally try to write something
-    long result = socketWrite(ptr->socket, ptr->buf, ptr->length, 0);
-    if (result == SOCKET_ERROR) {
-        printf("[wquery]\r\n\tsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
-        CLOSESOCKET(ptr->socket);
-        wSocketsSet(ptr->socket, INVALID_SOCKET);
-        HashFree(ptr->socket, 0);
+    //if toomany skippings
+    if (skipping >= 3000) {
+        printf("[wquery]\r\n\tsend failed too many reties\r\n\r\n");
+
+        //send command to close
+        pipePacket_t packet;
+        packet.type = 'C';
+        packet.socketId = ptr->socket;
+        write(wSocketsGetPipe(ptr->socket)[1], &packet, sizeof(pipePacket_t));
+
+
     } else {
-        //printf("[wquery]\r\n\tq finished\r\n\r\n");
-        if (result < ptr->length) {
-            wSocketsAddSkipping(ptr->socket);
-            addToWriteQuery(ptr->socket, ptr->buf + result, ptr->length - result, wQuery);
+
+        //now we can finally try to write something
+        long result = socketWrite(ptr->socket, ptr->buf, ptr->length, 0);
+        if (result == SOCKET_ERROR) {
+            printf("[wquery]\r\n\tsend failed with error: %d\r\n\r\n", (int)GETSOCKETERRNO());
+            
+            //send command to close
+            pipePacket_t packet;
+            packet.type = 'C';
+            packet.socketId = ptr->socket;
+            write(wSocketsGetPipe(ptr->socket)[1], &packet, sizeof(pipePacket_t));
+
         } else {
-            printf("[wquery]\r\n\t bytes written %ld!\r\n\r\n", result);
+            //printf("[wquery]\r\n\tq finished\r\n\r\n");
+            if (result < ptr->length) {
+                wSocketsAddSkipping(ptr->socket);
+                addToWriteQuery(ptr->socket, ptr->buf + result, ptr->length - result, wStack);
+            } else {
+                wSocketsResetSkipping(ptr->socket);
+                printf("[wquery]\r\n\t bytes written %ld!\r\n\r\n", result);
+            }
         }
     }
 
     //free buffers
     //printf("[wquery]\r\n\tq free buffer\r\n\r\n");
-    free(ptr->buf);
-    //printf("[wquery]\r\n\tq free q object\r\n\r\n");
-    free(ptr);
 
     //remove fence
     //sem_post(&mutex);
@@ -436,6 +499,8 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     #endif
 
     signal(SIGPIPE, SIG_IGN);//ignore signals
+
+    HashInit();
 
     printf("[WolframLibrary_initialize]\r\ninitialized\r\n\r\n"); 
     sem_init(&mutex, 0, 1);
@@ -690,7 +755,7 @@ DLLEXPORT int socketListen(WolframLibraryData libData, mint Argc, MArgument *Arg
     return LIBRARY_NO_ERROR; 
 }
 
-static void socketListenerConnectionTask(mint taskId, void* vtarg) {
+/*static void socketListenerConnectionTask(mint taskId, void* vtarg) {
     SocketListenerTaskArgs targ = (SocketListenerTaskArgs)vtarg;
 	WolframLibraryData libData = targ->libData;
 
@@ -751,9 +816,11 @@ static void socketListenerConnectionTask(mint taskId, void* vtarg) {
                     switch(cmd->type) {
                         case 'P':
                             printf("[poll] poke!\r\n");
-                            sem_wait(&mutex);
+  
+                            printf("[poll] locked state\r\n");
                             int st = pokeWriteQuery(wQuery);
-                            sem_post(&mutex);
+                            printf("[poll] unlock\r\n");
+   
 
                             if (st == ST_NEXT) {
                                 pipePacket_t packet;
@@ -849,20 +916,7 @@ static void socketListenerConnectionTask(mint taskId, void* vtarg) {
                         numfds--;                        
                     } else  {
                         printf("[socketListenerConnectionTask]\r\nclient %d might be broken; error: %d\r\n\r\n", (int)poll_set[fd_index].fd, (int)GETSOCKETERRNO());
-                        /*                 
-                        //wSocketsSet(poll_set[fd_index].fd, INVALID_SOCKET);
-                        close(poll_set[fd_index].fd);
-                        wSocketsSet(poll_set[fd_index].fd, INVALID_SOCKET);
-                        HashFree(poll_set[fd_index].fd, 0);
-                        //poll_set[fd_index].events = 0;
-                        printf("Removing client on fd %d\n", poll_set[fd_index].fd);
-                        int i;
-                        if (numfds > 1) {
-                            poll_set[fd_index] = poll_set[numfds - 1];
-                        } else {
-                            poll_set[fd_index].events = 0;
-                        }
-                        numfds--;  */
+
 
                     }
 
@@ -871,7 +925,7 @@ static void socketListenerConnectionTask(mint taskId, void* vtarg) {
         
         }
     }   
-}
+}*/
 
 static void socketListenerTask(mint taskId, void* vtarg)
 {
@@ -891,8 +945,8 @@ static void socketListenerTask(mint taskId, void* vtarg)
     signal(SIGPIPE, SIG_IGN);//ignore signals
 
     //allocating que
-    wQuery_t** wQuery = (wQuery_t**)malloc(sizeof(wQuery_t*)*wQuery_size);
-    wQueryInit(wQuery);
+    wStack_t* stack = (wStack_t*)malloc(sizeof(wStack_t));
+    stack->cursor = -1;
     //add server's socket
     //wSocketsSetwQuery(server->listenSocket, wQuery);
 
@@ -938,7 +992,7 @@ static void socketListenerTask(mint taskId, void* vtarg)
                         HashAllocate(clientSocket, 0);
                         wSocketsSet(clientSocket, 1);
                         wSocketsSetPipe(clientSocket, pipe);
-                        wSocketsSetwQuery(clientSocket, wQuery);
+                        wSocketsSetwStack(clientSocket, stack);
                         
                         /*server->clients[server->clientsLength] = clientSocket;
                         //poolingPoolPush(clientSocket);
@@ -971,49 +1025,13 @@ static void socketListenerTask(mint taskId, void* vtarg)
                     printf("Pipe cmd: %c\n", cmd->type);
 
                     switch(cmd->type) {
-                        case 'W':
-
-                        /*    wbuffer = (BYTE*)malloc(cmd->payload);
-                            long result = read(pipe[0], wbuffer, cmd->payload);
-                            if (result != cmd->payload) {
-                                perror("read payload error");
-                                exit(3);
-                            }
-
-                            result = socketWrite(cmd->socketId, wbuffer, cmd->payload, 0);
-                            if (result == SOCKET_ERROR) {
-                                //printf("[poll]\r\n\tsend failed with error: %d for %ld\r\n\r\n", (int)GETSOCKETERRNO(), cmd->socketId);
-                                CLOSESOCKET(cmd->socketId);
-                                wSocketsSet(cmd->socketId, INVALID_SOCKET);
-                                HashFree(cmd->socketId, 0);
-
-                                //looking for it in the pool...
-                                for (int j=0; j<POLL_SIZE; ++j) {
-                                    if (poll_set[j].fd == cmd->socketId) {
-                                        printf("removing it from the poll pool...\r\n");
-                                        poll_set[j].events = 0;
-                                        if (numfds > 1) {
-                                            poll_set[j] = poll_set[numfds - 1];
-                                        }
-                                        numfds--;  
-                                        break;
-                                    }
-                                }      
-
-                            } else {
-                                //printf("[wquery]\r\n\tq finished\r\n\r\n");
-                                printf("[poll]\r\n\t bytes written %ld! from the first trial!\r\n\r\n", result);
-                            }   
-                            
-                            free(wbuffer);                         
-                            //go further...*/
-
-
                         case 'P':
                             printf("[poll] poke!\r\n");
-                            sem_wait(&mutex);
-                            int st = pokeWriteQuery(wQuery);
-                            sem_post(&mutex);
+             
+                            printf("[poll] locked state\r\n");
+                            int st = pokeWriteQuery(stack);
+                            printf("[poll] unlocked\r\n");
+                   
 
                             if (st == ST_NEXT) {
                                 pipePacket_t packet;
@@ -1028,13 +1046,20 @@ static void socketListenerTask(mint taskId, void* vtarg)
                                 //poke itself
                                 write(pipe[1], &packet, sizeof(pipePacket_t));
                                 //tried to use timers, but works only on Linux ;()
-                                SLEEP(ms);
+                                SLEEP(1 * ms);
                             }
 
                         break;
 
                         case 'C':
+                            if (wSocketsGetState(cmd->socketId) == INVALID_SOCKET) {
+                                printf("[c] socket %ld was already closed!\r\n", cmd->socketId);
+                                //break the loop
+                                fd_index = numfds;
+                                break;
+                            }
 
+                            printf("[c] closing socket %ld...\r\n", cmd->socketId);
                             wSocketsSet(cmd->socketId, INVALID_SOCKET);
                             HashFree(cmd->socketId, 0);
                             CLOSESOCKET(cmd->socketId);
@@ -1044,15 +1069,16 @@ static void socketListenerTask(mint taskId, void* vtarg)
                                 if (poll_set[j].fd == cmd->socketId) {
                                     printf("removing it from the poll pool...\r\n");
                                     poll_set[j].events = 0;
-                                    if (numfds > 1) {
-                                        poll_set[j] = poll_set[numfds - 1];
-                                    }
+                                    poll_set[j].fd = -1;
+                                    poll_set[j] = poll_set[numfds - 1];
                                     numfds--;  
                                     break;
                                 }
                             }
 
                             printf("done!\r\n");
+                            fd_index = numfds;
+                            
                         break;
 
                         case 'E':
@@ -1069,14 +1095,6 @@ static void socketListenerTask(mint taskId, void* vtarg)
 
                     if (wSocketsGetState(poll_set[fd_index].fd) == INVALID_SOCKET) {
                         printf("oupps... already closed %d\n", poll_set[fd_index].fd);
-                        printf("Removing client on fd %d\n", poll_set[fd_index].fd);
-                        int i;
-                        if (numfds > 1) {
-                            poll_set[fd_index] = poll_set[numfds - 1];
-                        } else {
-                            poll_set[fd_index].events = 0;
-                        }
-                        numfds--;  
                         continue;                        
                     }
                     //ch++;
@@ -1094,23 +1112,15 @@ static void socketListenerTask(mint taskId, void* vtarg)
                         libData->ioLibraryFunctions->DataStore_addMNumericArray(ds, data);
                         libData->ioLibraryFunctions->raiseAsyncEvent(taskId, "Received", ds);
                     } else if (iResult == 0) {
-                        printf("[socketListenerTask]\r\nclient %d closed\r\n\r\n", (int)poll_set[fd_index].fd);
+                        printf("[socketListenerTask recv]\r\nclient %d will be closed\r\n\r\n", (int)poll_set[fd_index].fd);
                         //poolingPoolDelete(poll_set[fd_index].fd);
                         //server->clients[i] = INVALID_SOCKET;
-                        wSocketsSet(poll_set[fd_index].fd, INVALID_SOCKET);
-                        HashFree(poll_set[fd_index].fd, 0);
-                        close(poll_set[fd_index].fd);
-                        //HashFree(poll_set[fd_index].fd);
+                        //wSocketsSet(poll_set[fd_index].fd, INVALID_SOCKET);
+                        pipePacket_t packet;
+                        packet.type = 'C';
+                        packet.socketId = poll_set[fd_index].fd;
+                        write(pipe[1], &packet, sizeof(pipePacket_t));
 
-                        //poll_set[fd_index].events = 0;
-                        printf("Removing client on fd %d\n", poll_set[fd_index].fd);
-                        int i;
-                        if (numfds > 1) {
-                            poll_set[fd_index] = poll_set[numfds - 1];
-                        } else {
-                            poll_set[fd_index].events = 0;
-                        }
-                        numfds--;                        
                     } else  {
                         printf("[socketListenerTask]\r\nclient %d might be broken; error: %d\r\n\r\n", (int)poll_set[fd_index].fd, (int)GETSOCKETERRNO());
                         /*                 
@@ -1230,7 +1240,7 @@ DLLEXPORT int socketConnect(WolframLibraryData libData, mint Argc, MArgument *Ar
         SocketListenerTaskArgs threadArg = (SocketListenerTaskArgs)malloc(sizeof(struct SocketListenerTaskArgs_st));
         threadArg->libData=libData; 
         threadArg->pipe = fd;
-        libData->ioLibraryFunctions->createAsynchronousTaskWithThread(socketListenerConnectionTask, threadArg);
+        //libData->ioLibraryFunctions->createAsynchronousTaskWithThread(socketListenerConnectionTask, threadArg);
         globalListener = 0;
 
         globalPipe = fd;
@@ -1249,7 +1259,7 @@ DLLEXPORT int socketConnect(WolframLibraryData libData, mint Argc, MArgument *Ar
 #pragma region socketBinaryWrite[socketId_Integer, data: ByteArray[<>], dataLength_Integer, bufferLength_Integer]: socketId_Integer 
 
 DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
-    //sem_wait(&mutex);
+    ////sem_wait(&mutex);
 
     SOCKET clientId = MArgument_getInteger(Args[0]); 
     MNumericArray mArr = MArgument_getMNumericArray(Args[1]); 
@@ -1269,7 +1279,7 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     }*/
     pipePacket_t packet;
     int state = wSocketsGetState(clientId);
-    wQuery_t** w = wSocketsGetwQuery(clientId);
+    wStack_t* w = wSocketsGetwStack(clientId);
 
     switch (state) {
         case INVALID_SOCKET:
@@ -1288,9 +1298,9 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
             //addToWriteQuery(clientId, data, dataLength);
 
             //trigger the second thread safely
-            sem_wait(&mutex);
+    
             addToWriteQuery(clientId, data, dataLength, w);
-            sem_post(&mutex);
+      
             packet.type = 'P';
             int fd = wSocketsGetPipe(clientId)[1];
             printf("[socketBinaryWrite]\r\n\tsent a trigger via pipe %d\r\n\r\n", 0);
@@ -1317,7 +1327,7 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
 #pragma region socketWriteString[socketId_Integer, data_String, dataLength_Integer, bufferSize_Integer]: socketId_Integer 
 
 DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
-    //sem_wait(&mutex);
+    ////sem_wait(&mutex);
 
     int iResult; 
     SOCKET socketId = MArgument_getInteger(Args[0]); 
@@ -1333,7 +1343,7 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
         return LIBRARY_FUNCTION_ERROR; 
     }*/
     int state = wSocketsGetState(socketId);
-    wQuery_t** w = wSocketsGetwQuery(socketId);
+    wStack_t* w = wSocketsGetwStack(socketId);
     pipePacket_t packet;
 
     switch (state) {
@@ -1352,9 +1362,9 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
             //addToWriteQuery(socketId, data, dataLength);
 
             //trigger the second thread safely
-            sem_wait(&mutex);
+      
             addToWriteQuery(socketId, data, dataLength, w);
-            sem_post(&mutex);
+       
             packet.type = 'P';
             int fd = wSocketsGetPipe(socketId)[1];
             printf("[socketBinaryWrite]\r\n\tsent a trigger via pipe %d\r\n\r\n", 0);
