@@ -1,10 +1,16 @@
 #!/usr/bin/env wolframscript
 (* ::Package:: *)
 
+LINUXLIVUVPATH = "/home/kirill/Downloads/libuv-1.46.0/build/libuv.so"
+MACOSXLIBUVPATH = "/usr/local/lib/libuv.a"
+
+MACOSXLIBUVINCLUDE = "/usr/local/lib/libuv.a"
+OSLinker = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVPATH<>" -pthread"}, {LINUXLIVUVPATH<>" -pthread"}]];
+
 Get["CCompilerDriver`"]; 
 
 $libs = If[$OperatingSystem === "Windows", {"ws2_32"}, {}];
-$src  = If[$OperatingSystem === "Windows", "csockets.c", "usockets.c"];
+$src  = If[$OperatingSystem === "Windows", "csockets.c", "csockets.c"];
 
 Block[{$directory, $libSrc, $libDir, $linkerOptions}, 
 	$directory = DirectoryName[If[$InputFileName == "", 
@@ -33,6 +39,7 @@ Block[{$directory, $libSrc, $libDir, $linkerOptions},
 		"Debug" -> True,
 		"Libraries" -> $libs,
 		"IncludeDirectories" -> {FileNameJoin[{$directory, "Source", "lib"}]}
-		(*,"CompileOptions"->{"-Og"}*)
+		(*,"CompileOptions"->{"-Og"}*),
+		"LinkerOptions"->OSLinker
 	]
 ]; 

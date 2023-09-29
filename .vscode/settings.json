@@ -25,6 +25,9 @@
         "*.tcc": "c",
         "locale": "c",
         "chrono": "c",
-        "__locale": "c"
+        "__locale": "c",
+        "cstdint": "c",
+        "functional": "c",
+        "system_error": "c"
     }
 }

@@ -9,7 +9,7 @@ PacletRepositories[{
   Github -> "https://github.com/KirillBelovTest/WebSocketHandler",
   Github -> "https://github.com/JerryI/wl-wsp",
   Github -> "https://github.com/JerryI/wl-misc"
-}]
+}, "Passive"->True]
 
 
 SetDirectory[$InputFileName // DirectoryName]

@@ -22,29 +22,15 @@
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <netdb.h>
-    #include <unistd.h>
     #include <errno.h>
     #include <fcntl.h>
     #include <wchar.h>
     #include <signal.h>
-    #define INVALID_SOCKET -1
-    #define NO_ERROR 0
-    #define SOCKET_ERROR -1
-    #define ZeroMemory(Destination,Length) memset((Destination),0,(Length))
-    #define SLEEP usleep
-    #define ms 1000
-    inline void nopp() {}
-    #define SOCKET int
-    #define ISVALIDSOCKET(s) ((s) >= 0)
-    #define CLOSESOCKET(s) close(s)
-    #define GETSOCKETERRNO() (errno)
+    
     #define BYTE uint8_t
 #endif
 
-#include <stdio.h>
-#include <semaphore.h>
-
-#include <poll.h>
+#include <uv.h>
 
 //#include <sys/timerfd.h>
 #define POLL_SIZE 256
