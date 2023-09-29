@@ -40,8 +40,7 @@ http["MessageHandler", "WSP"] = GetFileRequestQ[{"wsp"}] -> (HypertextProcess[#,
 http["MessageHandler", "Files"] = GetFileRequestQ[{"png", "html", "js"}] -> (ImportFile[#, "Base" -> $PublicDirectory] &)
 
 (* ::End::*)
-c = CSocketOpen[8010];
-Pause[3];
+c = CSocketOpen["127.0.0.1", 8010];
 SocketListen[c, tcp@# &];
 
 SetOptions[WSPEngine, "Cache" -> False];

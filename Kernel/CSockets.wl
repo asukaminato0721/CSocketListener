@@ -44,11 +44,11 @@ Begin["`Private`"];
 
 
 
-CSocketOpen[host_String: "127.0.0.1", port_Integer] := (task;
+CSocketOpen[host_String: "127.0.0.1", port_Integer] := (
 CSocketObject[host, port // ToString]); 
 
-CSocketOpen[hostport_String: "127.0.0.1"] := (task;
-With[{port = StringSplit[addr,":"]//Last, host = StringSplit[addr,":"]//First},
+CSocketOpen[hostport_String: "127.0.0.1"] := (
+With[{port = StringSplit[hostport,":"]//Last, host = StringSplit[hostport,":"]//First},
 	CSocketObject[host, port]
 ]
 ); 
@@ -63,47 +63,37 @@ StringMatchQ[address, __ ~~ ":" ~~ NumberString] :=
 CSocketObject[Apply[socketConnect, StringSplit[address, ":"]]]; 
 
 
-CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_ByteArray] := 
-If[socketBinaryWrite[socketId, data, Length[data], $bufferSize] === -1, $Failed, 0]; 
+CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], bytes_ByteArray] := 
+If[socketWrite[socketId, bytes, Length[bytes]] === -1, Print["lib writting failed!"]; $Failed, Null]; 
 
 
-CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_List] := 
-If[socketBinaryWrite[socketId, ByteArray[data], Length[data], $bufferSize] === -1, $Failed, 0]; 
-
-
-CSocketObject /: WriteString[CSocketObject[socketId_Integer], data_String] := 
-If[socketWriteString[socketId, data, StringLength[data], $bufferSize] === -1, $Failed, 0]; 
-
-
-CSocketObject /: SocketReadMessage[CSocketObject[socketId_Integer], bufferSize_Integer: $bufferSize] := 
-socketReadMessage[socketId, bufferSize]; 
-
-
-CSocketObject /: SocketReadyQ[CSocketObject[socketId_Integer]] := 
-socketReadyQ[socketId]; 
+CSocketObject /: WriteString[CSocketObject[socketId_Integer], string_String] := 
+If[socketWriteString[socketId, string, StringLength[string]] === -1, Print["lib writting failed!"]; $Failed, Null]; 
 
 
 CSocketObject /: Close[CSocketObject[socketId_Integer]] := 
-socketClose[socketId]; 
+closeSocket[socketId]; 
+
 
 router[task_, event_, {serverId_, clientId_, data_}] := (
-	Print["recv"];
 	router[serverId][toPacket[task, event, {serverId, clientId, data}]]
 )
 
 task := (task = True; Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&];); 
 
 CSocketObject /: SocketListen[CSocketObject[host_String, port_String], handler_] := 
-Module[{sid}, 
-	sid = createServer[host, port];
+With[{sid = createServer[host, port]}, 
+	
+	
+	task;
 	Echo["Created server with sid: "<>ToString[sid]];
 	router[sid] = handler;
 
 	CSocketListener[<|
-		"Socket" -> socket, 
+		"Port" -> ToExpression[port], 
+		"Host" -> host,
 		"Handler" -> handler, 
-		"TaskId" -> id, 
-		"Task" -> task
+		"Task" -> Null
 	|>]
 ]; 
 
@@ -142,7 +132,6 @@ toPacket[task_, event_, {serverId_, clientId_, data_}] :=
 socketOpen = LibraryFunctionLoad[$libFile, "socket_open", {String, String}, Integer]; 
 *)
 
-socketClose = LibraryFunctionLoad[$libFile, "close_socket", {Integer}, Integer]; 
 
 runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]; 
 
@@ -155,11 +144,13 @@ socketListenerTaskRemove = LibraryFunctionLoad[$libFile, "socketListenerTaskRemo
 
 socketConnect = LibraryFunctionLoad[$libFile, "socketConnect", {String, String}, Integer]; *)
 
+socketWrite = LibraryFunctionLoad[$libFile, "socket_write", {Integer, "ByteArray", Integer}, Integer]; 
 
-socketBinaryWrite = LibraryFunctionLoad[$libFile, "socket_write", {Integer, "ByteArray", Integer, Integer}, Integer]; 
+
+socketWriteString = LibraryFunctionLoad[$libFile, "socket_write_string", {Integer, String, Integer}, Integer]; 
 
 
-socketWriteString = LibraryFunctionLoad[$libFile, "socket_write_string", {Integer, String, Integer, Integer}, Integer]; 
+closeSocket = LibraryFunctionLoad[$libFile, "close_socket", {Integer}, Integer]; 
 
 
 (*socketReadyQ = LibraryFunctionLoad[$libFile, "socketReadyQ", {Integer}, True | False]; 
