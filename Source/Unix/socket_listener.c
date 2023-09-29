@@ -67,20 +67,10 @@ int hash_int_small_table[HASH_SMALL_TABLE_SIZE];
 
 
 unsigned long hash_int(unsigned long key, unsigned long size){
-	/* Robert Jenkins' 32 bit Mix Function */
-	key += (key << 12);
-	key ^= (key >> 22);
-	key += (key << 4);
-	key ^= (key >> 9);
-	key += (key << 10);
-	key ^= (key >> 2);
-	key += (key << 7);
-	key ^= (key >> 12);
 
-	/* Knuth's Multiplicative Method */
-	key = ((key) >> 3) * 2654435761;
-
-	return key % size;
+    unsigned long knuth = 2654435769;
+    unsigned long y = key;
+    return ((y * knuth) >> (32 - 0)) % size;
 }
 
 int hash_table_get(unsigned long key) {
@@ -155,6 +145,9 @@ WolframIOLibrary_Functions ioLibrary;
 WolframNumericArrayLibrary_Functions numericLibrary;
 mint asyncObjID;
 
+
+uv_mutex_t mutex;
+
 typedef struct SocketTaskArgs_st {
     WolframNumericArrayLibrary_Functions numericLibrary;
     WolframIOLibrary_Functions ioLibrary;
@@ -170,6 +163,8 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
     for (int i=0; i<10; ++i) servers[i].state = -1; //all closed
 
     nservers = 0;
+
+    uv_mutex_init(&mutex);
 
     clients = (client*)malloc(sizeof(client)*MAXCLIENTS);
     for (int i=0; i<MAXCLIENTS; ++i) clients[i].state = -1; //all closed
@@ -190,6 +185,8 @@ DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
 }
 
 DLLEXPORT void WolframLibrary_uninitialize(WolframLibraryData libData) {
+    uv_stop(loop);
+
     return;
 }
 
@@ -222,7 +219,7 @@ void pipeBufData (uv_buf_t buf, uv_stream_t *client) {
 
 
 void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
-    printf("echo read\n");
+    //printf("echo read\n");
     if (nread > 0) {
         uv_buf_t b = uv_buf_init(buf->base, nread);
         pipeBufData(b, client);
@@ -314,10 +311,19 @@ void on_new_connection(uv_stream_t *server, int status) {
     }
 }
 
+uv_async_t cbwrite;
+uv_async_t cbclose;
+
+
+void async_cb_write(uv_async_t* async, int status);
+void async_cb_close(uv_async_t* async, int status);
+
 static void uvTask(mint asyncObjID, void* vtarg)
 {
     fprintf(stderr, "\nHee uvTask: %d\n", asyncObjID);
     printf("Event-Loop started! \n");
+    uv_async_init(loop, &cbwrite, async_cb_write);
+    uv_async_init(loop, &cbclose, async_cb_close);
     uv_run(loop, UV_RUN_DEFAULT);
 }
 
@@ -388,7 +394,7 @@ volatile uv_write_q uv_write_que[128];
 volatile int uv_write_que_ptr = -1;
 
 void echo_write(uv_write_t *req, int status) {
-    printf("echo write\n");
+    //printf("echo write\n");
     if (status) {
         int uid = fetchClientId(req->handle);
         printf("writeerror !\n");
@@ -429,50 +435,51 @@ typedef struct {
 write_fifo_t write_fifo[1024];
 write_fifo_t close_fifo[64];
 
+
+
 void async_cb_write(uv_async_t* async, int status) {
   //printf("async_cb\n");
-
+  uv_mutex_lock(&mutex);
   while (write_fifo_ptr >= 0) {
     uv_write(write_fifo[write_fifo_ptr].req, write_fifo[write_fifo_ptr].stream, write_fifo[write_fifo_ptr].buf, 1, echo_write);
     write_fifo_ptr--;
   }
-
-  uv_close((uv_handle_t*) async, NULL);
+  uv_mutex_unlock(&mutex);
+  //uv_close((uv_handle_t*) async, NULL);
 }
 
 void async_cb_close(uv_async_t* async, int status) {
   //printf("async_cb_close\n");
-
+    uv_mutex_lock(&mutex);
   while (close_fifo_ptr >= 0) {
     uv_close((uv_handle_t*)close_fifo[close_fifo_ptr].handle, NULL);
     close_fifo_ptr--;
   }
-
-  uv_close((uv_handle_t*) async, NULL);
+uv_mutex_unlock(&mutex);
+  //uv_close((uv_handle_t*) async, NULL);
 }
 
 
 
 int uv_write_push(uv_write_t* req, uv_stream_t* stream, uv_buf_t* buf) {
     uv_async_t *message = (uv_async_t*)malloc(sizeof(uv_async_t));
-
+    uv_mutex_lock(&mutex);
     ++write_fifo_ptr;
     write_fifo[write_fifo_ptr].req = req;
     write_fifo[write_fifo_ptr].stream = stream;
     write_fifo[write_fifo_ptr].buf = buf;
+    uv_mutex_unlock(&mutex);
 
-    int r = uv_async_init(loop, message, async_cb_write);
-    uv_async_send(message);
+    uv_async_send(&cbwrite);
 }
 
 void uv_close_push(uv_handle_t* handle, void* m) {
     uv_async_t *message = (uv_async_t*)malloc(sizeof(uv_async_t));
-
+    uv_mutex_lock(&mutex);
     ++close_fifo_ptr;
     close_fifo[close_fifo_ptr].handle = handle;
-
-    int r = uv_async_init(loop, message, async_cb_close);
-    uv_async_send(message);    
+    uv_mutex_unlock(&mutex);
+    uv_async_send(&cbclose);    
 }
 
 

@@ -39,7 +39,7 @@ http = HTTPHandler[];
 
 http["MessageHandler", "Index"] = AssocMatchQ[<|"Path" -> "/"|>] -> (HypertextProcess[#, "index.wsp", "Base" -> $PublicDirectory] &)
 http["MessageHandler", "WSP"] = GetFileRequestQ[{"wsp"}] -> (HypertextProcess[#, "Base" -> $PublicDirectory] &)
-http["MessageHandler", "WSP"] = GetFileRequestQ[{"png", "html"}] -> (ImportFile[#, "Base" -> $PublicDirectory] &)
+http["MessageHandler", "WSP"] = GetFileRequestQ[{"png", "html", "js"}] -> (ImportFile[#, "Base" -> $PublicDirectory] &)
 
 (* ::End::*)
 httplistener =  Check[CSocketListen["127.0.0.1:8010", tcp@# &], Print["FUCK LibraryLink and Sockets! Using shitty ZMQ..."]; SocketListen["127.0.0.1:8010", tcp@# &]];
