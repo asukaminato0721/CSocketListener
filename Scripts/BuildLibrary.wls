@@ -2,7 +2,7 @@
 (* ::Package:: *)
 
 LINUXLIVUVPATH = "/home/kirill/Downloads/libuv-1.46.0/build/libuv.so"
-MACOSXLIBUVPATH = "/usr/local/lib/libuv.a"
+MACOSXLIBUVPATH = "/opt/homebrew/lib/libuv.a"
 
 MACOSXLIBUVINCLUDE = "/usr/local/lib/libuv.a"
 
@@ -16,9 +16,9 @@ $CCompiler={"Compiler"->GenericCCompiler,
 
  *)
 
-OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVINCLUDE}, {}]];
+OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {}, {}]];
 
-OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, {"uv"}];
+OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, {MACOSXLIBUVPATH}];
 OSPath = If[$OperatingSystem === "Windows", "Windows", "Unix"];
 
 OSSrc = If[$OperatingSystem === "Windows", "wsockets.c", "csockets.c"];
