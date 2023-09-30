@@ -16,7 +16,7 @@ $CCompiler={"Compiler"->GenericCCompiler,
 
  *)
 
-OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {}, {}]];
+OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/include"}, {}]];
 
 OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, {MACOSXLIBUVPATH}];
 OSPath = If[$OperatingSystem === "Windows", "Windows", "Unix"];
