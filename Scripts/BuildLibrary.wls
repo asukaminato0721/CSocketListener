@@ -18,10 +18,10 @@ $CCompiler={"Compiler"->GenericCCompiler,
 
 OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVINCLUDE}, {}]];
 
-OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, {}];
+OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, {"uv"}];
 OSPath = If[$OperatingSystem === "Windows", "Windows", "Unix"];
 
-OSLinker = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVPATH<>" -pthread"}, {LINUXLIVUVPATH<>" -pthread"}]];
+OSSrc = If[$OperatingSystem === "Windows", "wsockets.c", "csockets.c"];
 
 Block[{$directory, $libSrc, $libDir}, 
 	$directory = DirectoryName[If[$InputFileName == "", 
@@ -33,7 +33,7 @@ Block[{$directory, $libSrc, $libDir},
 	$libSrc = File[FileNameJoin[{
 		$directory, 
 		"Source", 
-		"csockets.c"
+		OSSrc
 	}]]; 
 
 
@@ -49,5 +49,5 @@ Block[{$directory, $libSrc, $libDir},
 
 	Get["CCompilerDriver`"]; 
 
-	CreateLibrary[$libSrc, "csockets" , "TargetDirectory" -> $libDir, "Debug"->True, "LinkerOptions"->OSLinker,	"Libraries"->OSLibs, "IncludeDirectories"->OSIncludes]
+	CreateLibrary[$libSrc, "csockets" , "TargetDirectory" -> $libDir, "Debug"->True, "Libraries"->OSLibs, "IncludeDirectories"->OSIncludes]
 ]; 
