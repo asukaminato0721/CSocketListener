@@ -3,6 +3,11 @@
 (* ::Chapter:: *)
 (*CSocketListener*)
 
+(* bug-fix OpenMP on Linux machines *)
+If[$OperatingSystem == "Linux", 
+	Echo["CSockets >> OpenMP patch will be applied!"];
+	Run["export KMP_INIT_AT_FORK=FALSE"];
+];
 
 (* ::Section:: *)
 (*Begin package*)
@@ -103,7 +108,6 @@ With[{sid = createServer[host, port]},
 
 
 $directory = DirectoryName[$InputFileName, 2]; 
-
 
 $libFile = FileNameJoin[{
 	$directory, 
