@@ -16,9 +16,9 @@ $CCompiler={"Compiler"->GenericCCompiler,
 
  *)
 
-OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/include"}, {}]];
+OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/include"}, {LINUXLIVUVPATH}]];
 
-OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, {MACOSXLIBUVPATH}];
+OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVPATH}, {LINUXLIVUVPATH}]];
 OSPath = If[$OperatingSystem === "Windows", "Windows", "Unix"];
 
 OSSrc = If[$OperatingSystem === "Windows", "wsockets.c", "csockets.c"];
