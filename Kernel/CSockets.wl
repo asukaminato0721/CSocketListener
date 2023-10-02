@@ -4,7 +4,7 @@
 (*CSocketListener*)
 
 (* bug-fix OpenMP on Linux machines *)
-If[$OperatingSystem == "Linux", 
+If[$OperatingSystem == "Unix", 
 	Echo["CSockets >> OpenMP patch will be applied!"];
 	Run["export KMP_INIT_AT_FORK=FALSE"];
 ];
