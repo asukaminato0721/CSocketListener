@@ -105,6 +105,7 @@ With[{sid = createServer[host, port]},
 
 (* ::Section:: *)
 (*Internal*)
+DynamicLibraryExtension = Switch[$OperatingSystem, "Windows", "dll", "MacOSX", "dylib", "Unix", "so"]
 
 
 $directory = DirectoryName[$InputFileName, 2]; 
@@ -113,7 +114,7 @@ $libFile = FileNameJoin[{
 	$directory, 
 	"LibraryResources", 
 	$SystemID, 
-	"csockets." <> Internal`DynamicLibraryExtension[]
+	"csockets." <> DynamicLibraryExtension
 }]; 
 
 
