@@ -8,7 +8,7 @@
         ?>   
         <br/>
         <?wsp 
-                ListLinePlotly[data // Hold] // WLJS
+                Graphics[{Pink, Line[data // Offload]}, PlotRange->{{0,6}, {-1,1}}, Controls->True, Axes->True] // WLJS
         ?>
         <br/>
      

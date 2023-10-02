@@ -4,16 +4,16 @@ PacletInstall["JerryI/LPM"]
 PacletRepositories[{
   Github -> "https://github.com/KirillBelovTest/Objects",
   Github -> "https://github.com/KirillBelovTest/Internal",
-  Github -> "https://github.com/JerryI/TCPServer",
-  Github -> "https://github.com/JerryI/HTTPHandler",
-  Github -> "https://github.com/JerryI/WebSocketHandler",
+  Github -> "https://github.com/KirillBelovTest/TCPServer",
+  Github -> "https://github.com/KirillBelovTest/HTTPHandler",
+  Github -> "https://github.com/KirillBelovTest/WebSocketHandler",
   Github -> "https://github.com/JerryI/wl-wsp",
-  Github -> "https://github.com/JerryI/wl-misc"  
+  Github -> "https://github.com/JerryI/wl-misc"
 }]
 
 
 SetDirectory[$InputFileName // DirectoryName]
-Get[FileNameJoin[{ParentDirectory[Directory[]], "Kernel", "CSocketListener.wl"}]]
+Get[FileNameJoin[{ParentDirectory[Directory[]], "Kernel", "CSockets.wl"}]]
 
 <<KirillBelov`Objects`
 <<KirillBelov`Internal`
@@ -43,7 +43,7 @@ http["MessageHandler", "Index"] = AssocMatchQ[<|"Path" -> "/"|>] -> (HypertextPr
 http["MessageHandler", "WSP"] = GetFileRequestQ[{"wsp"}] -> (HypertextProcess[#, "Base" -> $PublicDirectory] &)
 
 (* ::End::*)
-CSocketListen["127.0.0.1:8010", tcp@# &]
+SocketListen[CSocketOpen[8010], tcp@# &]
 
 Print["Staring WS/HTTP server..."];
 
@@ -67,7 +67,7 @@ WLJSTransportHandler["GetSymbol"] = Function[{expr, client, callback},
     callback[expr // ReleaseHold];
 ]
 
-CSocketListen["127.0.0.1:8020", wcp@# &]
+SocketListen[CSocketOpen[8020], wcp@#&]
 
 SetOptions[WSPEngine, "Cache" -> False];
 

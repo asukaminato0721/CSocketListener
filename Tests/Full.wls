@@ -4,16 +4,16 @@ PacletInstall["JerryI/LPM"]
 PacletRepositories[{
   Github -> "https://github.com/KirillBelovTest/Objects",
   Github -> "https://github.com/KirillBelovTest/Internal",
-  Github -> "https://github.com/JerryI/TCPServer",
-  Github -> "https://github.com/JerryI/HTTPHandler",
-  Github -> "https://github.com/JerryI/WebSocketHandler",
+  Github -> "https://github.com/KirillBelovTest/TCPServer",
+  Github -> "https://github.com/KirillBelovTest/HTTPHandler",
+  Github -> "https://github.com/KirillBelovTest/WebSocketHandler",
   Github -> "https://github.com/JerryI/wl-wsp",
-  Github -> "https://github.com/JerryI/wl-misc"    
+  Github -> "https://github.com/JerryI/wl-misc"
 }]
 
 
 SetDirectory[$InputFileName // DirectoryName]
-Get[FileNameJoin[{ParentDirectory[Directory[]], "Kernel", "CSocketListener.wl"}]]
+Get[FileNameJoin[{ParentDirectory[Directory[]], "Kernel", "CSockets.wl"}]]
 
 <<KirillBelov`Objects`
 <<KirillBelov`Internal`
@@ -27,7 +27,6 @@ Get[FileNameJoin[{ParentDirectory[Directory[]], "Kernel", "CSocketListener.wl"}]
 <<JerryI`WSP`WLJS`
 <<JerryI`Misc`Events`
 <<JerryI`Misc`WLJS`Transport`
-
 
 $PublicDirectory = FileNameJoin[{Directory[], "Full"}]
 
@@ -44,7 +43,7 @@ http["MessageHandler", "Index"] = AssocMatchQ[<|"Path" -> "/"|>] -> (HypertextPr
 http["MessageHandler", "WSP"] = GetFileRequestQ[{"wsp"}] -> (HypertextProcess[#, "Base" -> $PublicDirectory] &)
 
 (* ::End::*)
-httplistener =  Check[CSocketListen["127.0.0.1:8010", tcp@# &], Print["FUCK LibraryLink and Sockets! Using shitty ZMQ..."]; SocketListen["127.0.0.1:8010", tcp@# &]];
+SocketListen[CSocketOpen[8010], tcp@# &]
 
 Print["Staring WS/HTTP server..."];
 
@@ -68,9 +67,16 @@ WLJSTransportHandler["GetSymbol"] = Function[{expr, client, callback},
     callback[expr // ReleaseHold];
 ]
 
-Check[CSocketListen["127.0.0.1:8020", wcp@#&], Print["FUCK LibraryLink and Sockets! Using shitty ZMQ..."]; SocketListen["127.0.0.1:8020", wcp@#&]];
+SocketListen[CSocketOpen[8020], wcp@#&]
 
 SetOptions[WSPEngine, "Cache" -> False];
+
+
+
+
+
+
+
 
 
 
@@ -84,6 +90,6 @@ EventHandler["update", Function[d,
 ]]
 
 
-StringTemplate["open http://``:``/"][httplistener[[1]]["Host"], httplistener[[1]]["Port"]] // Print;
+StringTemplate["open http://``:``/"]["127.0.0.1", "8010"] // Print;
 While[True, Pause[1]];
 

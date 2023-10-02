@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <time.h>
 
 #define SLEEP Sleep
 
@@ -16,6 +17,8 @@
 #define GETSOCKETERRNO() (WSAGetLastError())
 #define WSACLEANUP (WSACleanup())
 
+
+#define ssize_t long 
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -84,6 +87,12 @@ DLLEXPORT int run_uvloop(WolframLibraryData libData, mint Argc, MArgument *Args,
     return LIBRARY_NO_ERROR;     
 }
 
+WSAEVENT EventArray[WSA_MAXIMUM_WAIT_EVENTS];
+WSAOVERLAPPED AcceptOverlapped;
+
+int EventTotal = 0;
+
+
 static void ListenSocketTask(mint asyncObjID, void* vtarg)
 {
 
@@ -94,10 +103,26 @@ static void ListenSocketTask(mint asyncObjID, void* vtarg)
   SOCKET clientSocket;
   SERVER* server;
 
+  SYSTEMTIME st, lt;
+  int sleep_mode_notify = 1;
+    
+    
+  time_t READ_TIME = time(NULL);
 
   while(ioLibrary->asynchronousTaskAliveQ(asyncObjID)) {
-    
-    SLEEP(1);
+   // SLEEP(1);
+   if (time(NULL) - READ_TIME > 1) {
+    if (sleep_mode_notify == 1) {
+        printf("nothing happend . sleeping...\r\n");
+        sleep_mode_notify = 0;
+    }
+    SLEEP(100);
+   }
+
+   if (sleep_mode_notify == 2) {
+     printf("waking up...!\r\n");
+    sleep_mode_notify = 1;
+   }
 
     for (size_t l = 0; l < nServers; ++l) {
         server = servers[l];
@@ -105,6 +130,13 @@ static void ListenSocketTask(mint asyncObjID, void* vtarg)
         
         if (clientSocket != INVALID_SOCKET) {
             printf("NEW CLIENT: %d\n", clientSocket);
+            READ_TIME = time(NULL);
+            if (sleep_mode_notify == 0) {
+                sleep_mode_notify = 2;
+            } else {
+                sleep_mode_notify = 1;
+            }
+            
             server->clients[server->clientsLength] = clientSocket; 
             server->clientsLength = server->clientsLength + 1;
 
@@ -120,9 +152,15 @@ static void ListenSocketTask(mint asyncObjID, void* vtarg)
             if (server->clients[i] == INVALID_SOCKET) continue;
             int iResult = recv(server->clients[i], server->buf, server->buflen, 0); 
             if (iResult > 0) {            
-                printf("CURRENT NUMBER OF CLIENTS: %d\n", server->clientsLength);
-                printf("MAX NUMBER OF CLIENTS: %d\n", server->clientsMaxLength);
-                printf("RECEIVED %d BYTES\n", iResult);
+                READ_TIME = time(NULL);
+                if (sleep_mode_notify == 0) {
+                    sleep_mode_notify = 2;
+                } else {
+                    sleep_mode_notify = 1;
+                }
+                //printf("CURRENT NUMBER OF CLIENTS: %d\n", server->clientsLength);
+               // printf("MAX NUMBER OF CLIENTS: %d\n", server->clientsMaxLength);
+               // printf("RECEIVED %d BYTES\n", iResult);
                 dims[0] = iResult; 
                 numericLibrary->MNumericArray_new(MNumericArray_Type_UBit8, 1, dims, &data); 
                 memcpy(numericLibrary->MNumericArray_getData(data), server->buf, iResult);
@@ -237,6 +275,8 @@ size_t send_full_msg(int sock_fd, char *write_buf, size_t write_buf_length, size
         size_t chunk_size = chunk_s;
         if (write_buf_length < chunk_size) chunk_size = write_buf_length;
 
+        chunk_size = write_buf_length;
+
 
 
         size_t pos_in_buf = 0; //starts at 0 and is incremented to write to the right location
@@ -256,11 +296,11 @@ size_t send_full_msg(int sock_fd, char *write_buf, size_t write_buf_length, size
         
             if (rv==0) {
                 printf("No data available...sleeping\n");
-                SLEEP(100);
+                SLEEP(50);
                 
                 num_neg_count++;
     
-                if(num_neg_count > 3) { //three timeouts in a row
+                if(num_neg_count > 30) { //three timeouts in a row
                     printf("Timeout!\n");
                     return pos_in_buf == 0 ? -1 : pos_in_buf;
                 } else {
@@ -281,7 +321,7 @@ size_t send_full_msg(int sock_fd, char *write_buf, size_t write_buf_length, size
                 size_t remaining_buf_size = write_buf_length - pos_in_buf;                                     //avoids a segmentation fault
 
                 size_t bytes_to_write = remaining_buf_size > chunk_size ? chunk_size : remaining_buf_size; //works to prevent a segmentation fault
-                printf("Writting %d bytes to a pipe ...\n", bytes_to_write);
+               // printf("Writting %d bytes to a pipe ...\n", bytes_to_write);
                 size_sent = send(sock_fd, write_buf+pos_in_buf, bytes_to_write, 0);
 
                 if (size_sent < 0)
@@ -289,9 +329,9 @@ size_t send_full_msg(int sock_fd, char *write_buf, size_t write_buf_length, size
                     printf("Failed! sleeping 100 ms\n");
                     total_failed++;
                     num_neg_count++; //if there are 3 consecutive failed writes we will quit
-                    SLEEP(100);
+                    SLEEP(50);
                     //this_thread::sleep_for(chrono::microseconds(100)); //needs to wait to try and get more data
-                    if (num_neg_count>3) //timeout or 3 consecutive failed writes
+                    if (num_neg_count>30) //timeout or 3 consecutive failed writes
                     {
                         //log.msg("Timeout exceeded");
                         printf("3 consecutive failed writes!!!\n");
@@ -301,7 +341,7 @@ size_t send_full_msg(int sock_fd, char *write_buf, size_t write_buf_length, size
                     continue;
                 } else {
                     num_neg_count = 0; //reset the failed writes
-                    printf("writting to a pipe went good\n");
+                    //printf("writting to a pipe went good\n");
                     pos_in_buf += size_sent;
                 }
 
@@ -312,10 +352,10 @@ size_t send_full_msg(int sock_fd, char *write_buf, size_t write_buf_length, size
             //cout << "Duration: " << duration.count() << endl;
             //cout << "Timeout: " << timeout.count() << endl;
 
-            if (num_neg_count>3) //timeout or 3 consecutive failed writes
+            if (num_neg_count>30) //timeout or 3 consecutive failed writes
             {
                 //log.msg("Timeout exceeded");
-                printf("3 consecutive failed writes!!!\n");
+                printf("30 consecutive failed writes!!!\n");
                 return -1;
             }
 
@@ -329,7 +369,7 @@ size_t send_full_msg(int sock_fd, char *write_buf, size_t write_buf_length, size
             return -1; //error, no data received
         }
 
-        printf("writting was done correctly :)\n");
+        //printf("writting was done correctly :)\n");
             
 
         return pos_in_buf; //the full size of the message received
@@ -345,8 +385,8 @@ DLLEXPORT int socket_write(WolframLibraryData libData, mint Argc, MArgument *Arg
     BYTE *bytes = numericLibrary->MNumericArray_getData(MArgument_getMNumericArray(Args[1]));      
     mint bytesLen = MArgument_getInteger(Args[2]); 
 
-    printf("sending stuff....\n");
-    printf("real length: %lld, claimed: %lld\n", trueLength, bytesLen);
+    //printf("sending stuff....\n");
+    //printf("real length: %lld, claimed: %lld\n", trueLength, bytesLen);
 
 
 
@@ -364,7 +404,7 @@ DLLEXPORT int socket_write(WolframLibraryData libData, mint Argc, MArgument *Arg
 
     
     
-    printf("WRITE %lld BYTES\n", bytesLen);
+    //printf("WRITE %lld BYTES\n", bytesLen);
 
     MArgument_setInteger(Res, 0); 
     return LIBRARY_NO_ERROR; 
@@ -387,7 +427,7 @@ DLLEXPORT int socket_write_string(WolframLibraryData libData, mint Argc, MArgume
         return LIBRARY_NO_ERROR;
     }
 
-    printf("WRITE %d BYTES\n", textLen);
+    //printf("WRITE %d BYTES\n", textLen);
     MArgument_setInteger(Res, 0); 
     return LIBRARY_NO_ERROR; 
 }

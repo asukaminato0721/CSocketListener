@@ -2,26 +2,26 @@
 
 PacletObject[
   <|
-    "Name" -> "KirillBelov/CSocketListener",
-    "Description" -> "Socket Listener powered by pure C & UV",
+    "Name" -> "KirillBelov/CSockets",
+    "Description" -> "Sockets powered by pure C & UV (Unix only)",
     "Creator" -> "Kirill Belov",
     "License" -> "MIT",
     "PublisherID" -> "KirillBelov",
-    "Version" -> "1.3.7",
+    "Version" -> "5.0.4",
     "WolframVersion" -> "12+",
-    "PrimaryContext" -> "KirillBelov`CSocketListener`",
+    "PrimaryContext" -> "KirillBelov`CSockets`",
     "Extensions" -> {
       {
         "Kernel",
         "Root" -> "Kernel",
-        "Context" -> {"KirillBelov`CSocketListener`"},
+        "Context" -> {"KirillBelov`CSockets`"},
         "Symbols" -> {
-          "KirillBelov`CSocketListener`CSocket",
-          "KirillBelov`CSocketListener`CSocketListen",
-          "KirillBelov`CSocketListener`CSocketListener"
+          "KirillBelov`CSockets`CSocketObject",
+          "KirillBelov`CSockets`CSocketListener",
+          "KirillBelov`CSockets`CSocketOpen",
+          "KirillBelov`CSockets`CSocketConnect"
         }
       },
-      {"Documentation", "Language" -> "English"},
       {"LibraryLink", "Root" -> "LibraryResources"},
       {
         "Asset",
@@ -29,7 +29,8 @@ PacletObject[
           {"License", "./LICENSE"},
           {"ReadMe", "./README.md"},
           {"Source", "./Source"},
-          {"Scripts", "./Scripts"}
+          {"Scripts", "./Scripts"},
+          {"Tests", "./Tests"}
         }
       }
     }

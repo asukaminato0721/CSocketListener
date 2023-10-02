@@ -1,16 +1,17 @@
-# CSocketListener
+# CSockets
 
-Linux - Stable
-MacOS - Stable
-Windows - Unstable (sometimes crashes)
+CSockets is a FAST socket interface for Wolfram Language, written in C
 
-relies on [libuv](https://github.com/libuv/libuv) and native wsock library for Windows
+- Linux - Stable (UV based)
+- MacOS - Stable (UV based)
+- Windows - Stable (native)
+
+It is more than 15 times faster than the native implementation shipped with the Wolfram Kernel. This is achieved with zero overhead using native Windows/Unix low-level sockets.
+## Why is it better than other C implementations of tiny TCP servers?
+- It handles error `35`, which most implementations treat as a regular error and break the data transfer. In practice, this is a common occurrence (depending on the machine and network) when a payload exceeds the buffer capacity of a network card / pipe. Our server saves failed leftover bytes for later and retries after some time.
+
 
 ## Examples
-### Echo
-```shell
-wolframscript -f Tests/Basic.wls
-```
 
 ### Single page
 ```shell
@@ -22,34 +23,16 @@ wolframscript -f Tests/Simple.wls
 wolframscript -f Tests/Full.wls
 ```
 
-## Building
+### Stress test
+```shell
+wolframscript -f Tests/Metaballs.wls
+```
+
+## Building (NO NEED)
 In the `LibraryResurces` we placed all prebuild binaries.
 __Skip this section if you want just to run this package__
 
 If there are some issues with a shipped binaries, one can try to compile it.
-In general it relies on `libuv`, that has to be crossplatform, however there are some differences in the recipy
-### MacOS
-no configuring is required
+```bash
+wolframscript -f Scritps/BuildLibrary.wls
 ```
-brew install libuv
-wolframscript -f Scripts/BuildLibrary.wls
-```
-### Linux
-One has to build `libuv` first following [the instructions](https://github.com/libuv/libuv). 
-Once you have your `libuv.so` file, place it somewhere and change the line
-```mathematica
-OSLinker = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {"/usr/local/lib/libuv.a -pthread"}, {"/PATHTOLIBUVSRC/build/libuv.so -pthread"}]]
-```
-i.e. this line
-```
-/PATHTOLIBUVSRC/build/libuv.so
-```
-to the correct path in your system. Then you are ready to build
-
-```
-wolframscript -f Scripts/BuildLibrary.wls
-```
-
-### Windows
-MinGW fails to build the binaries, one has to install Visual Studio Compiler
-We do not know...

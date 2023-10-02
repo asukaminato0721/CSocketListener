@@ -2,9 +2,10 @@
 (* ::Package:: *)
 
 LINUXLIVUVPATH = "/home/kirill/Downloads/libuv-1.46.0/build/libuv.so"
-MACOSXLIBUVPATH = "/usr/local/lib/libuv.a"
+LINUXLIBUVINCLUDE = "/home/kirill/Downloads/libuv-1.46.0/includes"
 
-MACOSXLIBUVINCLUDE = "/usr/local/lib/libuv.a"
+MACOSXLIBUVPATH = "/opt/homebrew/lib/libuv.a"
+MACOSXLIBUVINCLUDE = "/opt/homebrew/include"
 
 Get["CCompilerDriver`"]; 
 
@@ -16,12 +17,12 @@ $CCompiler={"Compiler"->GenericCCompiler,
 
  *)
 
-OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVINCLUDE}, {}]];
+OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVINCLUDE}, {LINUXLIBUVINCLUDE}]];
 
-OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, {}];
+OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVPATH}, {LINUXLIVUVPATH}]];
 OSPath = If[$OperatingSystem === "Windows", "Windows", "Unix"];
 
-OSLinker = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVPATH<>" -pthread"}, {LINUXLIVUVPATH<>" -pthread"}]];
+OSSrc = If[$OperatingSystem === "Windows", "wsockets.c", "csockets.c"];
 
 Block[{$directory, $libSrc, $libDir}, 
 	$directory = DirectoryName[If[$InputFileName == "", 
@@ -33,8 +34,7 @@ Block[{$directory, $libSrc, $libDir},
 	$libSrc = File[FileNameJoin[{
 		$directory, 
 		"Source", 
-		OSPath,
-		"socket_listener.c"
+		OSSrc
 	}]]; 
 
 
@@ -50,5 +50,5 @@ Block[{$directory, $libSrc, $libDir},
 
 	Get["CCompilerDriver`"]; 
 
-	CreateLibrary[$libSrc, "socket_listener" , "TargetDirectory" -> $libDir, "Debug"->True, "LinkerOptions"->OSLinker,	"Libraries"->OSLibs, "IncludeDirectories"->OSIncludes]
+	CreateLibrary[$libSrc, "csockets" , "TargetDirectory" -> $libDir, "Debug"->True, "Libraries"->OSLibs, "IncludeDirectories"->OSIncludes]
 ]; 
