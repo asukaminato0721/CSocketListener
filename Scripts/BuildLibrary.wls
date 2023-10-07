@@ -41,6 +41,7 @@ Block[{$directory, $libSrc, $libDir},
 	$libDir = FileNameJoin[{
 		$directory, 
 		"LibraryResources", 
+		"7",
 		$SystemID
 	}]; 
 

@@ -33,6 +33,7 @@ DLLEXPORT mint WolframLibrary_getVersion( ) {
 }
 
 DLLEXPORT int WolframLibrary_initialize(WolframLibraryData libData) {
+    printf("version %d \r\n", WolframLibraryVersion);
     return 0;
 }
 

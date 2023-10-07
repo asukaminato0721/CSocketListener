@@ -110,9 +110,12 @@ DynamicLibraryExtension = Switch[$OperatingSystem, "Windows", "dll", "MacOSX", "
 
 $directory = DirectoryName[$InputFileName, 2]; 
 
-$libFile = FileNameJoin[{
+$LLversion = 7;
+
+$libFile := FileNameJoin[{
 	$directory, 
 	"LibraryResources", 
+	ToString[$LLversion],
 	$SystemID, 
 	"csockets." <> DynamicLibraryExtension
 }]; 
@@ -137,8 +140,21 @@ toPacket[task_, event_, {serverId_, clientId_, data_}] :=
 socketOpen = LibraryFunctionLoad[$libFile, "socket_open", {String, String}, Integer]; 
 *)
 
+If[FailureQ[
+		runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
+	]
+, 
+	Echo["CSockets >> TOO OLD >> trying to load LibraryLink 6"];
+	$LLversion = 6;
 
-runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]; 
+	If[FailureQ[
+		runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
+	],
+		Echo["CSockets >> sorry >> it is not going to work. Please contact the maintainers of CSockets library and share $Version, $SystemID"];
+	,
+		Echo["CSockets >> it did work! ;D"];
+	]
+]
 
 
 createServer = LibraryFunctionLoad[$libFile, "create_server", {String, String}, Integer]; 
