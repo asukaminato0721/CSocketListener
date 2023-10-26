@@ -5,7 +5,12 @@ LINUXLIVUVPATH = "/home/kirill/Downloads/libuv-1.46.0/build/libuv.so"
 LINUXLIBUVINCLUDE = "/home/kirill/Downloads/libuv-1.46.0/includes"
 
 MACOSXLIBUVPATH = "/opt/homebrew/lib/libuv.a"
+
+(*MACOSXLIBUVPATH = "/usr/local/lib/libuv.a"*)
+
 MACOSXLIBUVINCLUDE = "/opt/homebrew/include"
+
+(*MACOSXLIBUVINCLUDE = "/usr/local/include"*)
 
 Get["CCompilerDriver`"]; 
 

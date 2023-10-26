@@ -6,6 +6,8 @@
 #include <uv.h>
 #include <stdbool.h>
 
+#include <stdint.h>
+
 #include "WolframLibrary.h"
 #include "WolframIOLibraryFunctions.h"
 #include "WolframNumericArrayLibrary.h"
@@ -63,7 +65,7 @@ void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
 #define HASH_OCCUPIED 71
 
 typedef struct {
-    unsigned long stream;
+    uintptr_t stream;
     long id;
 
     int _flag;
@@ -72,23 +74,23 @@ typedef struct {
 #define hashmap_size 2048
 uState_t uState[hashmap_size];
 
-unsigned long hash(unsigned long key, unsigned int offset) {
+uintptr_t hash(uintptr_t key, unsigned int offset) {
     if (offset < 0 || offset > 32) {
         perror("offset hash table is way too big!");
         //SLEEP(10*ms);
         exit(-1);
     }
-    unsigned long knuth = 2654435769;
-    unsigned long y = key;
+    uintptr_t knuth = 2654435769;
+    uintptr_t y = key;
     return ((y * knuth) >> (32 - offset)) % hashmap_size;
 }
 
-unsigned long HashAllocate(unsigned long socketId, int offset);
+uintptr_t HashAllocate(uintptr_t socketId, int offset);
 
-void HashCopy(unsigned long socketId, int offsetSrc, int offsetDest) {
-    unsigned long hS = hash((unsigned long)socketId, offsetSrc);
+void HashCopy(uintptr_t socketId, int offsetSrc, int offsetDest) {
+    uintptr_t hS = hash((uintptr_t)socketId, offsetSrc);
     printf("hash >> allocate for a copy\n");
-    unsigned long hD = HashAllocate((unsigned long)socketId, offsetDest);
+    uintptr_t hD = HashAllocate((uintptr_t)socketId, offsetDest);
 
     printf("hash >> copied\n");
 
@@ -96,16 +98,16 @@ void HashCopy(unsigned long socketId, int offsetSrc, int offsetDest) {
 }
 
 //helper functions to check the status of the socket
-unsigned long HashAllocate(unsigned long socketId, int offset) {
-    printf("hash >> allocate %ld with offset %ld\n", (unsigned long)socketId, offset);
-    unsigned long h = hash((unsigned long)socketId, offset);
+uintptr_t HashAllocate(uintptr_t socketId, int offset) {
+    printf("hash >> allocate %ld with offset %d\n", (uintptr_t)socketId, offset);
+    uintptr_t h = hash((uintptr_t)socketId, offset);
     printf("hash >> %ld\n", h);
 
     if (uState[h]._flag == HASH_OCCUPIED) {
         printf("hash >> collizion!\n");
 
         //copy the original value
-        printf("hash >> copy old one %ld\n", (unsigned long)uState[h].stream);
+        printf("hash >> copy old one %ld\n", (uintptr_t)uState[h].stream);
         HashCopy(uState[h].stream, offset, offset + 1);
 
         uState[h]._flag = HASH_NEXT;
@@ -119,7 +121,7 @@ unsigned long HashAllocate(unsigned long socketId, int offset) {
 
     printf("hash >> ok!\n");
     uState[h]._flag = HASH_OCCUPIED;
-    uState[h].stream = (unsigned long)socketId;
+    uState[h].stream = (uintptr_t)socketId;
 
     return h;
 }
@@ -131,9 +133,9 @@ void HashInit() {
     }
 }
 
-void HashFree(unsigned long socketId, int offset) {
-    //printf("hash >> freeing %ld\n", (unsigned long)socketId);
-    unsigned long h = hash((unsigned long)socketId, offset);
+void HashFree(uintptr_t socketId, int offset) {
+    //printf("hash >> freeing %ld\n", (uintptr_t)socketId);
+    uintptr_t h = hash((uintptr_t)socketId, offset);
     if (uState[h]._flag == HASH_NEXT) {
         return HashFree(socketId, offset + 1);
     }
@@ -146,9 +148,9 @@ void HashFree(unsigned long socketId, int offset) {
     //printf("hash >> already freed!\n");
 }
 
-unsigned long HashGet(unsigned long socketId, int offset) {
+uintptr_t HashGet(uintptr_t socketId, int offset) {
     //printf("[HashGet] get\r\n\r\n");
-    unsigned long h = hash((unsigned long)socketId, offset);
+    uintptr_t h = hash((uintptr_t)socketId, offset);
     if (uState[h]._flag == HASH_NEXT) {
         //printf("[HashGet] next\r\n\r\n");
         return HashGet(socketId, offset + 1);
@@ -159,9 +161,9 @@ unsigned long HashGet(unsigned long socketId, int offset) {
 }
 
 
-void uStateSet(unsigned long socketId, int state) {
-    unsigned long h = HashGet(socketId, 0);
-    if ((unsigned long)(uState[h].stream) != (unsigned long)socketId || uState[h]._flag == HASH_FREE) {
+void uStateSet(uintptr_t socketId, int state) {
+    uintptr_t h = HashGet(socketId, 0);
+    if ((uintptr_t)(uState[h].stream) != (uintptr_t)socketId || uState[h]._flag == HASH_FREE) {
         printf("[uGetState] probably it is gone already\r\n\r\n");
         return;
     }
@@ -169,16 +171,16 @@ void uStateSet(unsigned long socketId, int state) {
 }
 
 int fetchClientId(uv_stream_t *client) {
-    unsigned long h = HashGet((unsigned long)client, 0);
-    if ((unsigned long)(uState[h].stream) != (unsigned long)client) {
+    uintptr_t h = HashGet((uintptr_t)client, 0);
+    if ((uintptr_t)(uState[h].stream) != (uintptr_t)client) {
         return -1;
     }
     return uState[h].id;
 }
 
 int fetchStreamId(uv_stream_t *s) {
-    unsigned long h = HashGet((unsigned long)s, 0);
-    if ((unsigned long)(uState[h].stream) != (unsigned long)s) {
+    uintptr_t h = HashGet((uintptr_t)s, 0);
+    if ((uintptr_t)(uState[h].stream) != (uintptr_t)s) {
         return -1;
     }
     return uState[h].id;
@@ -289,8 +291,8 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;   
         
-        uStateSet((unsigned long)clients[uid].stream, -1);
-        HashFree((unsigned long)clients[uid].stream, 0);
+        uStateSet((uintptr_t)clients[uid].stream, -1);
+        HashFree((uintptr_t)clients[uid].stream, 0);
 
         //printf("we closed socket: %d ;)))\n", fetchClientId(client));
         //clients[fetchClientId(client)].state = 2;
@@ -344,8 +346,8 @@ void on_new_connection(uv_stream_t *server, int status) {
 
     
     //hash_table_occupy((uv_stream_t*)c, nclients);
-    HashAllocate((uv_stream_t*)c, 0);
-    uStateSet((uv_stream_t*)c, nclients);
+    HashAllocate((uintptr_t)c, 0);
+    uStateSet((uintptr_t)c, nclients);
 
     clients[nclients].stream = (uv_stream_t*)c;
     clients[nclients].parent = (uv_stream_t*)server;
@@ -362,9 +364,9 @@ void on_new_connection(uv_stream_t *server, int status) {
         clients[nclients].state = -1;
         if (uv_is_closing((uv_handle_t*) c) == 0)
             uv_close((uv_handle_t*) c, NULL);
-        //hash_table_deoccupy((unsigned long)c);  
-        uStateSet((uv_stream_t*)c, -1);
-        HashFree((uv_stream_t*)c, 0);
+        //hash_table_deoccupy((uintptr_t)c);  
+        uStateSet((uintptr_t)c, -1);
+        HashFree((uintptr_t)c, 0);
     }
 }
 
@@ -377,10 +379,10 @@ void async_cb_close(uv_async_t* async, int status);
 
 static void uvTask(mint asyncObjID, void* vtarg)
 {
-    fprintf(stderr, "\nHee uvTask: %d\n", asyncObjID);
+    fprintf(stderr, "\nHee uvTask: %lld\n", asyncObjID);
     printf("Event-Loop started! \n");
-    uv_async_init(loop, &cbwrite, async_cb_write);
-    uv_async_init(loop, &cbclose, async_cb_close);
+    uv_async_init(loop, &cbwrite, (void (*)(struct uv_async_s *))async_cb_write);
+    uv_async_init(loop, &cbclose, (void (*)(struct uv_async_s *))async_cb_close);
     uv_run(loop, UV_RUN_DEFAULT);
 }
 
@@ -412,8 +414,8 @@ DLLEXPORT int create_server(WolframLibraryData libData, mint Argc, MArgument *Ar
     findEmptyServersSlot();
 
     //hash_table_occupy((uv_stream_t*)s, nservers);
-    HashAllocate((uv_stream_t*)s, 0);
-    uStateSet((uv_stream_t*)s, nservers);
+    HashAllocate((uintptr_t)s, 0);
+    uStateSet((uintptr_t)s, nservers);
 
     servers[nservers].stream = (uv_stream_t*)s;
     servers[nservers].id = nservers;
@@ -430,7 +432,7 @@ DLLEXPORT int create_server(WolframLibraryData libData, mint Argc, MArgument *Ar
         return 1;
     }
 
-    printf("LISTEN unsigned long at %s:%d\n", listenAddrName, atoi(listenPortName)); 
+    printf("LISTEN uintptr_t at %s:%d\n", listenAddrName, atoi(listenPortName)); 
 
     //MArgument_setInteger(Res, nservers); 
 
@@ -467,8 +469,8 @@ void echo_write(uv_write_t *req, int status) {
         if (uv_is_closing((uv_handle_t*) clients[uid].stream) == 0)
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;
-        uStateSet((unsigned long)clients[uid].stream, -1);
-        HashFree((unsigned long)clients[uid].stream, 0);     
+        uStateSet((uintptr_t)clients[uid].stream, -1);
+        HashFree((uintptr_t)clients[uid].stream, 0);     
     }
 
     //printf("free write req !\n");
@@ -537,6 +539,8 @@ int uv_write_push(uv_write_t* req, uv_stream_t* stream, uv_buf_t* buf) {
     uv_mutex_unlock(&mutex);
 
     uv_async_send(&cbwrite);
+
+    return 0;
 }
 
 void uv_close_push(uv_handle_t* handle, void* m) {
@@ -568,8 +572,8 @@ DLLEXPORT int socket_write(WolframLibraryData libData, mint Argc, MArgument *Arg
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
             uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
 
-        uStateSet((unsigned long)clients[clientId].stream, -1);
-        HashFree((unsigned long)clients[clientId].stream, 0);
+        uStateSet((uintptr_t)clients[clientId].stream, -1);
+        HashFree((uintptr_t)clients[clientId].stream, 0);
  
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
@@ -613,8 +617,8 @@ DLLEXPORT int socket_write_string(WolframLibraryData libData, mint Argc, MArgume
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
             uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
         
-        uStateSet((unsigned long)clients[clientId].stream, -1);
-        HashFree((unsigned long)clients[clientId].stream, 0);
+        uStateSet((uintptr_t)clients[clientId].stream, -1);
+        HashFree((uintptr_t)clients[clientId].stream, 0);
 
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
@@ -647,8 +651,8 @@ DLLEXPORT int close_socket(WolframLibraryData libData, mint Argc, MArgument *Arg
         uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
     clients[clientId].state = -1;  
 
-    uStateSet((unsigned long)clients[clientId].stream, -1);
-    HashFree((unsigned long)clients[clientId].stream, 0);   
+    uStateSet((uintptr_t)clients[clientId].stream, -1);
+    HashFree((uintptr_t)clients[clientId].stream, 0);   
     
     MArgument_setInteger(Res, 0);
     return LIBRARY_NO_ERROR; 

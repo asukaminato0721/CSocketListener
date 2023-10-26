@@ -15,6 +15,7 @@
         "type_traits": "c",
         "variant": "c",
         "vector": "c",
-        "memory": "c"
+        "memory": "c",
+        "cstdint": "c"
     }
 }
