@@ -125,7 +125,13 @@ $bufferSize = 8192;
 
 
 If[!FileExistsQ[$libFile], 
-	Get[FileNameJoin[{$directory, "Scripts", "BuildLibrary.wls"}]]
+	$LLversion = 6;
+	Echo["CSockets >> 7 version was not found... trying 6"];
+	If[!FileExistsQ[$libFile], 
+		$LLversion = 7;
+		Echo["CSockets >> 6 version was not found... trying to compile it..."];
+		Get[FileNameJoin[{$directory, "Scripts", "BuildLibrary.wls"}]]
+	];
 ]; 
 
 
@@ -144,13 +150,15 @@ If[FailureQ[
 		runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
 	]
 , 
-	Echo["CSockets >> TOO OLD >> trying to load LibraryLink 6"];
+	Echo["CSockets >> Might be TOO OLD >> trying to load LibraryLink 6"];
 	$LLversion = 6;
 
 	If[FailureQ[
 		runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
 	],
 		Echo["CSockets >> sorry >> it is not going to work. Please contact the maintainers of CSockets library and share $Version, $SystemID"];
+		Exit[];
+		Abort[];
 	,
 		Echo["CSockets >> it did work! ;D"];
 	]
