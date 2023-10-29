@@ -14,6 +14,7 @@ MACOSXLIBUVINCLUDE = "/opt/homebrew/include"
 
 Get["CCompilerDriver`"]; 
 
+Echo["CScockets >> version WL >> "<>$Version];
 (*
 $CCompiler={"Compiler"->GenericCCompiler,
  "CompilerInstallation"->"C:\\mingw64\\bin",
