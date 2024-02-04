@@ -35,6 +35,8 @@ CSocketConnect::usage =
 CSocketListener::usage = 
 "CSocketListener[assoc] listener object."; 
 
+CSocketsClosingHandler::usage = 
+"CSocketsClosingHandler = Print is called when connection was lost"
 
 (* ::Section:: *)
 (*Private context*)
@@ -76,13 +78,22 @@ CSocketObject /: WriteString[CSocketObject[socketId_Integer], string_String] :=
 If[socketWriteString[socketId, string, StringLength[string]] === -1, Print["lib writting failed!"]; $Failed, Null]; 
 
 
+
 CSocketObject /: Close[CSocketObject[socketId_Integer]] := 
 closeSocket[socketId]; 
+
 
 
 router[task_, event_, {serverId_, clientId_, data_}] := (
 	router[serverId][toPacket[task, event, {serverId, clientId, data}]]
 )
+
+router[task_, event_, {-1006, clientId_}] := (
+	Echo["Closing handler >> "<>ToString[clientId]];
+	CSocketsClosingHandler[ CSocketObject[clientId] ]
+)
+
+
 
 task := (task = True; Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&];); 
 
