@@ -14,7 +14,7 @@ PacletObject[
       {
         "Kernel",
         "Root" -> "Kernel",
-        "Context" -> {"KirillBelov`CSockets`"},
+        "Context" -> {"KirillBelov`CSockets`", {"KirillBelov`CSockets`EventsExtension`", "EventsExtension.wl"}},
         "Symbols" -> {
           "KirillBelov`CSockets`CSocketObject",
           "KirillBelov`CSockets`CSocketListener",

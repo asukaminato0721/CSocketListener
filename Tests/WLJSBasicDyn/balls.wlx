@@ -1,0 +1,28 @@
+p     = {{0,0}};
+Graph = Graphics[{PointSize[0.05], Magenta, Point[p // Offload]}, PlotRange->{{-1,1}, {-1,1}}];
+
+Secret = $Options["Secret"];
+
+onLoad = CreateUUID[];
+EventHandler[onLoad, Function[Null, With[{cli = $Client},
+    task = With[{Secret = Secret},
+        SessionSubmit[ ScheduledTask[
+            p = Append[p, Last[p] + 0.1 RandomReal[{-1,1},2]];
+        , Quantity[0.1, "Seconds"]]]
+    ];
+
+    EventHandler[EventClone[cli], {
+        "Closed" -> Function[Null,
+            TaskRemove[task];
+            EventRemove[onLoad];
+            Echo["Widget got destoyed"];
+        ]
+    }];
+]]];
+
+<div>
+    <WLJS>
+	    <Graph/>
+    </WLJS>
+    <WebUIOnLoad Event={onLoad}/>
+</div>

@@ -290,6 +290,17 @@ DLLEXPORT int socketClose(WolframLibraryData libData, mint Argc, MArgument *Args
 
 #pragma endregion
 
+#pragma region internalClosingStateBroadcast
+
+void broadcastState(int state, SOCKET client, int taskId, WolframLibraryData libData) {
+    DataStore ds = libData->ioLibraryFunctions->createDataStore();
+    libData->ioLibraryFunctions->DataStore_addInteger(ds, 0);
+    libData->ioLibraryFunctions->DataStore_addInteger(ds, client);
+    libData->ioLibraryFunctions->raiseAsyncEvent(taskId, "Closed", ds);    
+}
+
+#pragma endregion
+
 #pragma region socketListen[socketid_Integer, bufferSize_Integer]: taskId_Integer 
 
 static void socketListenerTask(mint taskId, void* vtarg)
@@ -336,13 +347,16 @@ static void socketListenerTask(mint taskId, void* vtarg)
                     libData->ioLibraryFunctions->DataStore_addMNumericArray(ds, data);
                     libData->ioLibraryFunctions->raiseAsyncEvent(taskId, "Received", ds);
                 } else if (iResult == 0) {
+                    broadcastState(INVALID_SOCKET, server->clients[i], taskId, libData);
                     server->clients[i] = INVALID_SOCKET;
+                    
                 }
             }
         }
 	}
 
     for (int i = 0; i < server->clientsLength; i++) {
+        broadcastState(INVALID_SOCKET, server->clients[i], taskId, libData);
         CLOSESOCKET(server->clients[i]);
     }
 
@@ -452,8 +466,8 @@ DLLEXPORT int socketBinaryWrite(WolframLibraryData libData, mint Argc, MArgument
     iResult = socketWrite(clientId, data, dataLength, bufferSize); 
     if (iResult == SOCKET_ERROR) {
         CLOSESOCKET(clientId);
-        MArgument_setInteger(Res, GETSOCKETERRNO()); 
-        return LIBRARY_FUNCTION_ERROR; 
+        MArgument_setInteger(Res, -GETSOCKETERRNO()); 
+        return LIBRARY_NO_ERROR; 
     }
     
     MArgument_setInteger(Res, clientId);
@@ -474,8 +488,8 @@ DLLEXPORT int socketWriteString(WolframLibraryData libData, mint Argc, MArgument
     iResult = socketWrite(socketId, data, dataLength, bufferSize); 
     if (iResult == SOCKET_ERROR) {
         CLOSESOCKET(socketId);
-        MArgument_setInteger(Res, GETSOCKETERRNO()); 
-        return LIBRARY_FUNCTION_ERROR; 
+        MArgument_setInteger(Res, -GETSOCKETERRNO()); 
+        return LIBRARY_NO_ERROR; 
     }
   
     MArgument_setInteger(Res, socketId);

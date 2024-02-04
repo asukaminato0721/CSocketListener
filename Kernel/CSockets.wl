@@ -50,9 +50,10 @@ CSocketOpen[host_String: "localhost", port_Integer] :=
 CSocketObject[socketOpen[host, ToString[port]]]; 
 
 
-CSocketOpen[address_String] /; 
+CSocketOpen[address_String ] /; 
 StringMatchQ[address, __ ~~ ":" ~~ NumberString] := 
-CSocketObject[Apply[socketOpen, StringSplit[address, ":"]]]; 
+CSocketObject[Apply[socketOpen, Join[StringSplit[address, ":"], {}] ] ]; 
+
 
 
 CSocketConnect[host_String: "localhost", port_Integer] := 
@@ -88,18 +89,22 @@ CSocketObject /: Close[CSocketObject[socketId_Integer]] :=
 socketClose[socketId]; 
 
 
-CSocketObject /: SocketListen[socket: CSocketObject[socketId_Integer], handler_, OptionsPattern[{SocketListen, "BufferSize" -> $bufferSize}]] := 
-Module[{task}, 
-	task = Internal`CreateAsynchronousTask[socketListen, {socketId, OptionValue["BufferSize"]}, handler[toPacket[##]]&]; 
-	CSocketListener[<|
-		"Socket" -> socket, 
-		"Host" -> socket["DestinationHostname"], 
-		"Port" -> socket["DestinationPort"], 
-		"Handler" -> handler, 
-		"TaskId" -> task[[2]], 
-		"Task" -> task
-	|>]
-]; 
+CSocketObject /: SocketListen[socket: CSocketObject[socketId_Integer], handler_, OptionsPattern[{SocketListen, "BufferSize" -> $bufferSize, "SocketEventsHandler" -> Print}]] := 
+With[{messager = OptionValue["SocketEventsHandler"]},
+	Module[{task}, 
+		task = Internal`CreateAsynchronousTask[socketListen, {socketId, OptionValue["BufferSize"]}, 
+			(With[{p = toPacket[##]}, Echo[p /. {a_Association :> handler[a], b_List :> (messager@@b)}] ] ) &
+		]; 
+		CSocketListener[<|
+			"Socket" -> socket, 
+			"Host" -> socket["DestinationHostname"], 
+			"Port" -> socket["DestinationPort"], 
+			"Handler" -> handler, 
+			"TaskId" -> task[[2]], 
+			"Task" -> task
+		|>]
+	]; 
+];
 
 
 CSocketListener /: DeleteObject[CSocketListener[assoc_Association]] := 
@@ -128,13 +133,17 @@ If[!FileExistsQ[$libFile],
 	Get[FileNameJoin[{$directory, "Scripts", "BuildLibrary.wls"}]]
 ]; 
 
+toPacket[task_, "Received", {serverId_, clientId_, data_}] :=
+	<|
+		"Socket" -> CSocketObject[serverId], 
+		"SourceSocket" -> CSocketObject[clientId], 
+		"DataByteArray" -> ByteArray[data]
+	|>
 
-toPacket[task_, event_, {serverId_, clientId_, data_}] := 
-<|
-	"Socket" -> CSocketObject[serverId], 
-	"SourceSocket" -> CSocketObject[clientId], 
-	"DataByteArray" -> ByteArray[data]
-|>; 
+toPacket[task_, "Closed", {serverId_, clientId_}] := {"Closed", CSocketObject[clientId]}
+
+
+
 
 
 socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
