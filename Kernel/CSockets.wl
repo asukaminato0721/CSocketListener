@@ -35,6 +35,8 @@ CSocketConnect::usage =
 CSocketListener::usage = 
 "CSocketListener[assoc] listener object."; 
 
+CSocketsClosingHandler::usage = 
+"CSocketsClosingHandler = Print is called when connection was lost"
 
 (* ::Section:: *)
 (*Private context*)
@@ -76,23 +78,31 @@ CSocketObject /: WriteString[CSocketObject[socketId_Integer], string_String] :=
 If[socketWriteString[socketId, string, StringLength[string]] === -1, Print["lib writting failed!"]; $Failed, Null]; 
 
 
+
 CSocketObject /: Close[CSocketObject[socketId_Integer]] := 
 closeSocket[socketId]; 
 
 
-router[task_, event_, {serverId_, clientId_, data_}] := (
+router[task_, "Received", {serverId_, clientId_, data_}] := (
 	router[serverId][toPacket[task, event, {serverId, clientId, data}]]
 )
 
+
 task := (task = True; Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&];); 
 
-CSocketObject /: SocketListen[CSocketObject[host_String, port_String], handler_] := 
-With[{sid = createServer[host, port]}, 
+StandardSocketEventsHandler = Echo[StringTemplate["`` was ``"][#2, #1] ]&;
+
+CSocketObject /: SocketListen[CSocketObject[host_String, port_String], handler_, OptionsPattern[{SocketListen, "SocketEventsHandler"->StandardSocketEventsHandler}] ] := 
+With[{sid = createServer[host, port], messageHandler = OptionValue["SocketEventsHandler"]}, 
 	
 	
 	task;
-	Echo["Created server with sid: "<>ToString[sid]];
+	Echo["Created server with sid: "<>ToString[sid] ];
 	router[sid] = handler;
+
+	router[t_, ev_, {sid, clientId_}] := (
+		messageHandler[ev, CSocketObject[clientId] ]
+	);
 
 	CSocketListener[<|
 		"Port" -> ToExpression[port], 

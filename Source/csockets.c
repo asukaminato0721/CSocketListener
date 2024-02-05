@@ -260,7 +260,23 @@ void pipeBufData (uv_buf_t buf, uv_stream_t *client) {
     ioLibrary->DataStore_addMNumericArray(ds, data);
 
     //printf("raise async event %d for server %d and client %d\n", asyncObjID, streamId, clientId);
-    ioLibrary->raiseAsyncEvent(asyncObjID, "RECEIVED_BYTES", ds);
+    ioLibrary->raiseAsyncEvent(asyncObjID, "Received", ds);
+}
+
+void broadcastClosedState (int clientId) {
+    int streamId = fetchStreamId(clients[clientId].parent);
+
+    printf("broadcast closed state!\n");
+	DataStore ds;
+
+    ds = ioLibrary->createDataStore();
+    
+    ioLibrary->DataStore_addInteger(ds, streamId);
+    ioLibrary->DataStore_addInteger(ds, clientId);
+    
+
+    //printf("raise async event %d for server %d and client %d\n", asyncObjID, streamId, clientId);
+    ioLibrary->raiseAsyncEvent(asyncObjID, "Closed", ds);
 }
 
 
@@ -291,6 +307,8 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;   
         
+        broadcastClosedState(uid);
+
         uStateSet((uintptr_t)clients[uid].stream, -1);
         HashFree((uintptr_t)clients[uid].stream, 0);
 
@@ -469,6 +487,7 @@ void echo_write(uv_write_t *req, int status) {
         if (uv_is_closing((uv_handle_t*) clients[uid].stream) == 0)
             uv_close((uv_handle_t*) clients[uid].stream, NULL);
         clients[uid].state = -1;
+        broadcastClosedState(uid);
         uStateSet((uintptr_t)clients[uid].stream, -1);
         HashFree((uintptr_t)clients[uid].stream, 0);     
     }
@@ -572,6 +591,8 @@ DLLEXPORT int socket_write(WolframLibraryData libData, mint Argc, MArgument *Arg
         if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
             uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
 
+        broadcastClosedState(clientId);
+
         uStateSet((uintptr_t)clients[clientId].stream, -1);
         HashFree((uintptr_t)clients[clientId].stream, 0);
  
@@ -620,6 +641,8 @@ DLLEXPORT int socket_write_string(WolframLibraryData libData, mint Argc, MArgume
         uStateSet((uintptr_t)clients[clientId].stream, -1);
         HashFree((uintptr_t)clients[clientId].stream, 0);
 
+        broadcastClosedState(clientId);
+
         clients[clientId].state = -1;
         MArgument_setInteger(Res, -1);
         return LIBRARY_NO_ERROR;
@@ -650,6 +673,8 @@ DLLEXPORT int close_socket(WolframLibraryData libData, mint Argc, MArgument *Arg
     if (uv_is_closing((uv_handle_t*) clients[clientId].stream) == 0)
         uv_close_push((uv_handle_t*) clients[clientId].stream, NULL);
     clients[clientId].state = -1;  
+
+    broadcastClosedState(clientId);
 
     uStateSet((uintptr_t)clients[clientId].stream, -1);
     HashFree((uintptr_t)clients[clientId].stream, 0);   
