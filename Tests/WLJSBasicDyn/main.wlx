@@ -12,12 +12,10 @@ Session = CreateUUID[];
         <title>WLX Template</title>
         <link href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css" rel="stylesheet"/>  
 		<WLJSHeader>
-			https://cdn.statically.io/gh/JerryI/wljs-interpreter/main/src/interpreter.js
-			https://cdn.statically.io/gh/JerryI/wljs-interpreter/main/src/core.js
-			https://cdn.statically.io/gh/JerryI/wljs-graphics-d3/main/dist/kernel.js
-			https://cdn.statically.io/gh/JerryI/wljs-plotly/main/dist/kernel.js
-			https://cdn.statically.io/gh/JerryI/wljs-inputs/main/dist/kernel.js
-			https://cdn.statically.io/gh/JerryI/Mathematica-ThreeJS-graphics-engine/master/dist/kernel.js
+			https://cdn.statically.io/gh/JerryI/wljs-interpreter/dev/src/interpreter.js
+			https://cdn.statically.io/gh/JerryI/wljs-interpreter/dev/src/core.js
+			https://cdn.statically.io/gh/JerryI/wljs-graphics-d3/dev/dist/kernel.js
+			https://cdn.statically.io/gh/JerryI/Mathematica-ThreeJS-graphics-engine/dev/dist/kernel.js
 		</WLJSHeader>
 		<WLJSTransportScript Port={ENV["WSPort"]}/>
     </head>  
