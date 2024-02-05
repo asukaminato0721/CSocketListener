@@ -3,7 +3,7 @@
 PacletObject[
   <|
     "Name" -> "KirillBelov/CSockets",
-    "Description" -> "Sockets powered by pure C",
+    "Description" -> "Sockets powered by C",
     "Creator" -> "Kirill Belov",
     "License" -> "MIT",
     "PublisherID" -> "KirillBelov",
@@ -14,7 +14,12 @@ PacletObject[
       {
         "Kernel",
         "Root" -> "Kernel",
-        "Context" -> {"KirillBelov`CSockets`", {"KirillBelov`CSockets`EventsExtension`", "EventsExtension.wl"}},
+        "Context" -> {
+          {"KirillBelov`CSockets`", "CSockets.wl"}, 
+          {"KirillBelov`CSockets`EventsExtension`", "EventsExtension.wl"},
+          {"KirillBelov`CSockets`Interface`Windows`", "Windows.wl"},
+          {"KirillBelov`CSockets`Interface`Unix`", "Unix.wl"}
+        },
         "Symbols" -> {
           "KirillBelov`CSockets`CSocketObject",
           "KirillBelov`CSockets`CSocketListener",

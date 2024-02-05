@@ -4,7 +4,7 @@
 Get["CCompilerDriver`"]; 
 
 
-Block[{$directory, $libSrc, $libDir, $linkerOptions}, 
+Block[{$directory, $libSrc, $libDir, $linkerOptions, $liblink = 7}, 
 	$directory = DirectoryName[If[$InputFileName == "", 
 		NotebookFileName[], 
 		$InputFileName
@@ -13,13 +13,14 @@ Block[{$directory, $libSrc, $libDir, $linkerOptions},
 	$libSrc = File[FileNameJoin[{
 		$directory, 
 		"Source", 
-		"csockets.c"
-	}]]; 
+		If[$OperatingSystem === "Windows", "wsockets.c", "usockets.c"]
+	}] ]; 
 
 
 	$libDir = FileNameJoin[{
 		$directory, 
 		"LibraryResources", 
+		ToString[$liblink],
 		$SystemID
 	}]; 
 
@@ -28,6 +29,8 @@ Block[{$directory, $libSrc, $libDir, $linkerOptions},
 
 	CreateLibrary[$libSrc, "csockets", 
 		"TargetDirectory" -> $libDir, 
-		"Debug" -> False
+		"Debug" -> True, 
+		"Libraries" -> If[$OperatingSystem === "Windows", {"ws2_32"}, {"/opt/homebrew/lib/libuv.a"}],
+		"IncludeDirectories" ->  If[$OperatingSystem === "Windows", {}, {"/opt/homebrew/include"}]
 	]
 ]; 

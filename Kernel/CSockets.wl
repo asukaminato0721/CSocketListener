@@ -10,6 +10,10 @@
 
 BeginPackage["KirillBelov`CSockets`"]; 
 
+Needs @ If[$OperatingSystem === "Windows",  
+	"KirillBelov`CSockets`Interface`Windows`", 
+	"KirillBelov`CSockets`Interface`Unix`"
+];
 
 (* ::Section:: *)
 (*Names*)
@@ -65,16 +69,19 @@ StringMatchQ[address, __ ~~ ":" ~~ NumberString] :=
 CSocketObject[Apply[socketConnect, StringSplit[address, ":"]]]; 
 
 
-CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_ByteArray] := 
-socketBinaryWrite[socketId, data, Length[data], $bufferSize]; 
+CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_ByteArray] := With[{result = socketBinaryWrite[socketId, data, Length[data], $bufferSize]},
+	If[result < 0, Echo[StringTemplate["CSockets >> writting error >> error ``"][result] ]; $Failed, result]
+]
 
 
-CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_List] := 
-socketBinaryWrite[socketId, ByteArray[data], Length[data], $bufferSize];
+CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_List] := With[{result = socketBinaryWrite[socketId, ByteArray[data], Length[data], $bufferSize]},
+	If[result < 0, Echo[StringTemplate["CSockets >> writting bytes >> error ``"][result] ]; $Failed, result]
+]
 
 
-CSocketObject /: WriteString[CSocketObject[socketId_Integer], data_String] := 
-socketWriteString[socketId, data, StringLength[data], $bufferSize]; 
+CSocketObject /: WriteString[CSocketObject[socketId_Integer], data_String] := With[{result = socketWriteString[socketId, data, StringLength[data], $bufferSize]},
+	If[result < 0, Echo[StringTemplate["CSockets >> writting string >> error ``"][result] ]; $Failed, result]
+]
 
 
 CSocketObject /: SocketReadMessage[CSocketObject[socketId_Integer], bufferSize_Integer: $bufferSize] := 
@@ -88,13 +95,15 @@ socketReadyQ[socketId];
 CSocketObject /: Close[CSocketObject[socketId_Integer]] := 
 socketClose[socketId]; 
 
+StandardSocketEventsHandler = Echo[StringTemplate["`` was ``"][#2, #1] ]&;
 
-CSocketObject /: SocketListen[socket: CSocketObject[socketId_Integer], handler_, OptionsPattern[{SocketListen, "BufferSize" -> $bufferSize, "SocketEventsHandler" -> Print}]] := 
+CSocketObject /: SocketListen[socket: CSocketObject[socketId_Integer], handler_, OptionsPattern[{SocketListen, "BufferSize" -> $bufferSize, "SocketEventsHandler" -> StandardSocketEventsHandler}]] := 
 With[{messager = OptionValue["SocketEventsHandler"]},
 	Module[{task}, 
-		task = Internal`CreateAsynchronousTask[socketListen, {socketId, OptionValue["BufferSize"]}, 
+		task = createAsynchronousTask[socketId, 
 			(With[{p = toPacket[##]}, Echo[p /. {a_Association :> handler[a], b_List :> (messager@@b)}] ] ) &
-		]; 
+		, "BufferSize" -> OptionValue["BufferSize"] ]; 
+
 		CSocketListener[<|
 			"Socket" -> socket, 
 			"Host" -> socket["DestinationHostname"], 
@@ -114,24 +123,7 @@ socketListenerTaskRemove[assoc["TaskId"]];
 (* ::Section:: *)
 (*Internal*)
 
-
-$directory = DirectoryName[$InputFileName, 2]; 
-
-
-$libFile = FileNameJoin[{
-	$directory, 
-	"LibraryResources", 
-	$SystemID, 
-	"csockets." <> Internal`DynamicLibraryExtension[]
-}]; 
-
-
 $bufferSize = 8192; 
-
-
-If[!FileExistsQ[$libFile], 
-	Get[FileNameJoin[{$directory, "Scripts", "BuildLibrary.wls"}]]
-]; 
 
 toPacket[task_, "Received", {serverId_, clientId_, data_}] :=
 	<|
@@ -140,40 +132,7 @@ toPacket[task_, "Received", {serverId_, clientId_, data_}] :=
 		"DataByteArray" -> ByteArray[data]
 	|>
 
-toPacket[task_, "Closed", {serverId_, clientId_}] := {"Closed", CSocketObject[clientId]}
-
-
-
-
-
-socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
-
-
-socketClose = LibraryFunctionLoad[$libFile, "socketClose", {Integer}, Integer]; 
-
-
-socketListen = LibraryFunctionLoad[$libFile, "socketListen", {Integer, Integer}, Integer]; 
-
-
-socketListenerTaskRemove = LibraryFunctionLoad[$libFile, "socketListenerTaskRemove", {Integer}, Integer]; 
-
-
-socketConnect = LibraryFunctionLoad[$libFile, "socketConnect", {String, String}, Integer]; 
-
-
-socketBinaryWrite = LibraryFunctionLoad[$libFile, "socketBinaryWrite", {Integer, "ByteArray", Integer, Integer}, Integer]; 
-
-
-socketWriteString = LibraryFunctionLoad[$libFile, "socketWriteString", {Integer, String, Integer, Integer}, Integer]; 
-
-
-socketReadyQ = LibraryFunctionLoad[$libFile, "socketReadyQ", {Integer}, True | False]; 
-
-
-socketReadMessage = LibraryFunctionLoad[$libFile, "socketReadMessage", {Integer, Integer}, "ByteArray"]; 
-
-
-socketPort = LibraryFunctionLoad[$libFile, "socketPort", {Integer}, Integer]; 
+toPacket[task_, any_String, {serverId_, clientId_}] := {any, CSocketObject[clientId]}
 
 
 (* ::Section:: *)

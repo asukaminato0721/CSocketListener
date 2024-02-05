@@ -12,6 +12,8 @@ PacletRepositories[{
   Github -> "https://github.com/JerryI/wl-misc" -> "dev"
 }]
 
+PacletDirectoryLoad[DirectoryName[$InputFileName] // ParentDirectory]
+
 RandomWord[];
 
 (* Here you can configure *)
@@ -46,10 +48,11 @@ ENV["WAddr"] := StringTemplate["``:``"][ENV["Host"], ENV["WSPort"]]
 <<JerryI`Misc`Events`
 <<JerryI`Misc`WLJS`Transport`
 
+<<KirillBelov`CSockets`EventsExtension`;
+
 (* WLX scripts *)
 
-FileNameJoin[{DirectoryName[$InputFileName] // ParentDirectory, "Kernel", "CSockets.wl"}] // Get;
-FileNameJoin[{DirectoryName[$InputFileName] // ParentDirectory, "Kernel", "EventsExtension.wl"}] // Get;
+
 
 SetDirectory[FileNameJoin[{If[StringQ[NotebookDirectory[]], NotebookDirectory[], DirectoryName[$InputFileName]], "WLJSBasicDyn"}]]
 
