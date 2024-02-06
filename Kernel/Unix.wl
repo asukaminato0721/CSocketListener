@@ -98,12 +98,14 @@ router;
 task;
 
 createAsynchronousTask[socketId_, handler_, OptionsPattern[] ] := With[{},
+ 
     With[{sid = createServer @@ sockets[socketId]},
         router[_, event_, {sid, payload__}] := (handler[sid, event, {sid, payload}]);
     ];   
 
     (* multiple async tasks are not supported! just return server's id *)
     If[!TrueQ[task], internalTask = Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&]; task = True];
+   
 
     internalTask
 ]
@@ -130,6 +132,7 @@ socketConnect[host_String, port_String] := With[{sid = socketConnectInternal[hos
     If[!TrueQ[task], internalTask = Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&]; task = True];
     
     buffers[sid] = {};
+
     router[_, event_, {sid, _, payload_}] := With[{data = ByteArray[payload]},
         If[Length[buffers[sid] ] == 0,
             buffers[sid] = data;
@@ -137,25 +140,34 @@ socketConnect[host_String, port_String] := With[{sid = socketConnectInternal[hos
             buffers[sid] = Join[buffers[sid], data];
         ];
     ];
-    
-    sid
+
+    TimeConstrained[
+        While[getState[sid] =!= 1,
+            Pause[0.3];
+        ];
+
+        sid
+
+    , 10, $Failed]
 ]
 
 socketReadyQ[uid_] := Length[buffers[uid] ] > 0
 
-socketReadMessage[uid_] := With[{},
-    While[!socketReadyQ[uid],
+socketReadMessage[uid_, size_] := With[{},
+    While[Length[buffers[uid] ] < size,
         Pause[0.1];
     ];
-    With[{d = buffers[sid]},
-        buffers[sid] = {};
+
+    With[{d = Take[buffers[uid], size]},
+        If[Length[buffers[uid] ] == size, buffer[uid] = {}, buffers[uid] = Drop[buffer[uid], size] ];
         d
     ]
 ]
 
-socketPort[uid_] := "Sorry I dunno ;()"
+getPort = LibraryFunctionLoad[$libFile, "get_socket_port", {Integer}, Integer]; 
+getState = LibraryFunctionLoad[$libFile, "get_socket_state", {Integer}, Integer]; 
 
-
+socketPort[uid_] := Null
 
 End[]
 EndPackage[]

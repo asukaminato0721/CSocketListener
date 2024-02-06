@@ -11,20 +11,19 @@ handler = Function[assoc,
     Echo[assoc];
     Echo["Reply"];
     Pause[2];
-    BinaryWrite[assoc["SourceSocket"], ByteArray[{7}] ];
+    BinaryWrite[assoc["SourceSocket"], "Pong" // StringToByteArray ];
     Echo["Done"];
 ];
 
-listener = SocketListen[SocketOpen[8000], handler[#]&]
-client = CSocketConnect[8000]
-
+listener = SocketListen[CSocketOpen[8000], handler[#]&]
+client = SocketConnect[8000]
 
 Pause[1]
-Pause[1]
-Pause[1]
 
-BinaryWrite[client, ByteArray[{7}] ];
-While[True, Pause[0.1]; ];
+BinaryWrite[client, "Ping" // StringToByteArray ];
+
+SocketReadMessage[client, 4] // ByteArrayToString // Echo;
+
 
 
 
