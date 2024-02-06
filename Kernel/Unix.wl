@@ -6,6 +6,12 @@ socketClose;
 socketBinaryWrite;
 socketWriteString;
 
+socketConnect;
+socketReadyQ;
+socketReadMessage;
+socketPort;
+
+
 Begin["`Private`"]
 
 (* ::Section:: *)
@@ -97,9 +103,9 @@ createAsynchronousTask[socketId_, handler_, OptionsPattern[] ] := With[{},
     ];   
 
     (* multiple async tasks are not supported! just return server's id *)
-    If[!TrueQ[task], Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&]; task = True];
+    If[!TrueQ[task], internalTask = Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&]; task = True];
 
-    Taksa[Null, sid]
+    internalTask
 ]
 
 Options[createAsynchronousTask] = {"BufferSize"->2^11}
@@ -115,6 +121,40 @@ createServer = LibraryFunctionLoad[$libFile, "create_server", {String, String}, 
 socketClose = LibraryFunctionLoad[$libFile, "close_socket", {Integer}, Integer]; 
 socketBinaryWrite = LibraryFunctionLoad[$libFile, "socket_write", {Integer, "ByteArray", Integer, Integer}, Integer]; 
 socketWriteString = LibraryFunctionLoad[$libFile, "socket_write_string", {Integer, String, Integer, Integer}, Integer]; 
+
+socketConnectInternal = LibraryFunctionLoad[$libFile, "socket_connect", {String, String}, Integer];
+
+buffers;
+
+socketConnect[host_String, port_String] := With[{sid = socketConnectInternal[host, port]},
+    If[!TrueQ[task], internalTask = Internal`CreateAsynchronousTask[runLoop, {0}, router[##]&]; task = True];
+    
+    buffers[sid] = {};
+    router[_, event_, {sid, _, payload_}] := With[{data = ByteArray[payload]},
+        If[Length[buffers[sid] ] == 0,
+            buffers[sid] = data;
+        ,
+            buffers[sid] = Join[buffers[sid], data];
+        ];
+    ];
+    
+    sid
+]
+
+socketReadyQ[uid_] := Length[buffers[uid] ] > 0
+
+socketReadMessage[uid_] := With[{},
+    While[!socketReadyQ[uid],
+        Pause[0.1];
+    ];
+    With[{d = buffers[sid]},
+        buffers[sid] = {};
+        d
+    ]
+]
+
+socketPort[uid_] := "Sorry I dunno ;()"
+
 
 
 End[]

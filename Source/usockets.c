@@ -35,6 +35,7 @@ struct cli
 {
     uv_stream_t* stream;
     uv_stream_t* parent;
+    int loopback;
     int id;
     int state;
 };
@@ -239,7 +240,12 @@ void pipeBufData (uv_buf_t buf, uv_stream_t *client) {
         printf("socket is broken!\r\n");
         return;
     }
-    int streamId = fetchStreamId(clients[clientId].parent);
+
+    //unusual case, when you connected to a remote server and also listeering 
+    int streamId = clientId;
+    
+    //usual case, when an external soket connected to a listerning server
+    if (clients[clientId].loopback < 0) streamId = fetchStreamId(clients[clientId].parent);
 
     mint dims[1]; 
     MNumericArray data;
@@ -264,7 +270,9 @@ void pipeBufData (uv_buf_t buf, uv_stream_t *client) {
 }
 
 void broadcastClosedState (int clientId) {
-    int streamId = fetchStreamId(clients[clientId].parent);
+    int streamId = clientId; 
+    
+    if (clients[clientId].loopback < 0) streamId = fetchStreamId(clients[clientId].parent);
 
     printf("broadcast closed state!\n");
 	DataStore ds;
@@ -371,6 +379,7 @@ void on_new_connection(uv_stream_t *server, int status) {
     clients[nclients].parent = (uv_stream_t*)server;
     clients[nclients].id = nclients;
     clients[nclients].state = 0;
+    clients[nclients].loopback = -1;
 
     uv_tcp_init(loop, c);
 
@@ -684,8 +693,82 @@ DLLEXPORT int close_socket(WolframLibraryData libData, mint Argc, MArgument *Arg
 }
 
 DLLEXPORT int stop_server(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res){
-    exit(-1);
+    //exit(-1);
     //MArgument_setInteger(Res, libData->ioLibraryFunctions->removeAsynchronousTask(taskId)); 
+    return LIBRARY_NO_ERROR; 
+}  
+
+
+void on_connect(uv_connect_t * req, int status) {
+    if (status == -1) {
+        fprintf(stderr, "error on_write_end");
+        return;
+    }
+    printf("Connected! \n");
+    //exit(-1);
+    //uv_stream_t *tcp = req->handle;
+    //uv_read_start(req->handle, alloc_buffer, echo_read);
+/*char buffer[100];
+    uv_buf_t buf = uv_buf_init(buffer, sizeof(buffer));
+    char *message = "hello";
+    buf.len = strlen(message);
+    buf.base = message;
+    uv_stream_t *tcp = req->handle;
+    uv_write_t write_req;
+    int buf_count = 1;
+    uv_write(&write_req, tcp, &buf, buf_count, NULL);    */
+}
+
+DLLEXPORT int socket_connect(WolframLibraryData libData, mint Argc, MArgument *Args, MArgument Res) 
+{
+    char* listenAddrName = MArgument_getUTF8String(Args[0]); 
+    char* listenPortName = MArgument_getUTF8String(Args[1]); 
+  
+    uv_tcp_t* socket = (uv_tcp_t*)malloc(sizeof(uv_tcp_t));
+
+    printf("Allocat11ed!\n");
+
+    printf("New connection for %d\n", nclients);
+    printf("New connection for %s\n", listenAddrName);
+    printf("New connection for port %d\n", atoi(listenPortName));
+ 
+    findEmptyClientsSlot();
+
+    printf("slot: %d\n", nclients);
+    //hash_table_occupy((uv_stream_t*)c, nclients);
+    HashAllocate((uintptr_t)socket, 0);
+    printf("Allocate22d!\n");
+    uStateSet((uintptr_t)socket, nclients);
+
+    printf("set state!");
+
+    clients[nclients].stream = (uv_stream_t*)socket;
+    clients[nclients].parent = (uv_stream_t*)socket;
+    clients[nclients].loopback = 0;
+    clients[nclients].id = nclients;
+    clients[nclients].state = 0;
+
+    printf("Al323223located!\n");
+
+
+    
+    
+    
+    uv_tcp_init(loop, socket);
+    printf("tcp init");
+
+    uv_connect_t* connect = (uv_connect_t*)malloc(sizeof(uv_connect_t));
+
+
+    struct sockaddr_in dest;
+    uv_ip4_addr(listenAddrName, atoi(listenPortName), &dest);
+    printf("tcp ip");
+
+    uv_tcp_connect(connect, socket, (const struct sockaddr*)&dest, on_connect);
+    printf("Done!");
+
+    MArgument_setInteger(Res, nclients); 
+
     return LIBRARY_NO_ERROR; 
 }
 
