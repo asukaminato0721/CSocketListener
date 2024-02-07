@@ -28,7 +28,7 @@ CSocketOpen::usage =
 
 
 CSocketConnect::usage = 
-"CSocketConnect[host, port] connect to socket. or SocketConnect[CSocketObject[...]]"; 
+"CSocketConnect[host, port] connect to socket"; 
 
 
 CSocketListener::usage = 
