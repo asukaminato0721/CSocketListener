@@ -296,6 +296,7 @@ void broadcastState(int state, SOCKET client, int taskId, WolframLibraryData lib
     DataStore ds = libData->ioLibraryFunctions->createDataStore();
     libData->ioLibraryFunctions->DataStore_addInteger(ds, 0);
     libData->ioLibraryFunctions->DataStore_addInteger(ds, client);
+    libData->ioLibraryFunctions->DataStore_addInteger(ds, 0);
     libData->ioLibraryFunctions->raiseAsyncEvent(taskId, "Closed", ds);    
 }
 
