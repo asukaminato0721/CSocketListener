@@ -8,21 +8,24 @@ Get["KirillBelov`CSockets`"];
 
 handler = Function[assoc, 
     Echo["Recevied some data..."];
-    Echo[assoc];
+    Echo[">> port "];
+    Echo[assoc["SourceSocket"]["DestinationPort"] ];
     Echo["Reply"];
     Pause[2];
     BinaryWrite[assoc["SourceSocket"], "Pong" // StringToByteArray ];
     Echo["Done"];
 ];
 
-listener = SocketListen[CSocketOpen[8000], handler[#]&]
-client = SocketConnect[8000]
+listener = SocketListen[SocketOpen[8000], handler[#]&]
+client = CSocketConnect[8000]
 
 Pause[1]
 
 BinaryWrite[client, "Ping" // StringToByteArray ];
 
 SocketReadMessage[client, 4] // ByteArrayToString // Echo;
+
+Echo[client["DestinationPort"] ]
 
 
 

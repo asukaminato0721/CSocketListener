@@ -28,7 +28,7 @@ CSocketOpen::usage =
 
 
 CSocketConnect::usage = 
-"CSocketConnect[host, port] connect to socket."; 
+"CSocketConnect[host, port] connect to socket. or SocketConnect[CSocketObject[...]]"; 
 
 
 CSocketListener::usage = 
@@ -62,6 +62,8 @@ CSocketObject[Apply[socketOpen, Join[StringSplit[address, ":"], {}] ] ];
 
 CSocketConnect[host_String: "localhost", port_Integer] := 
 CSocketObject[socketConnect[host, ToString[port]]]; 
+
+CSocketObject /: SocketConnect[CSocketObject[socketId_] ] := CSocketObject[ socketConnectInternal[socketId] ]; 
 
 
 CSocketConnect[address_String] /; 
@@ -132,7 +134,7 @@ toPacket[task_, "Received", {serverId_, clientId_, data_}] :=
 		"DataByteArray" -> ByteArray[data]
 	|>
 
-toPacket[task_, any_String, {serverId_, clientId_}] := {any, CSocketObject[clientId]}
+toPacket[task_, any_String, {serverId_, clientId_, data_}] := {any, CSocketObject[clientId]}
 
 
 (* ::Section:: *)
