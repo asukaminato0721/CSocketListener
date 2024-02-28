@@ -147,7 +147,7 @@ int socketWrite(SOCKET socketId, BYTE *data, int dataLength, int bufferSize){
     FD_ZERO(&set);
     FD_SET(socketId, &set);
 
-    printf("[socketWrite]\n\n");
+    //printf("[socketWrite]\n\n");
 
     for (int i = 0; i < dataLength; i += bufferSize) { 
         buffer = (char*)&data[i];  
@@ -204,7 +204,7 @@ DLLEXPORT int socketOpen(WolframLibraryData libData, mint Argc, MArgument *Args,
     struct addrinfo hints; 
     struct addrinfo *address = NULL; 
     int iMode = 1;
-    int buffSize = 262144;
+    int buffSize = 1048576 * 16;
 
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_family = AF_INET;
@@ -214,47 +214,57 @@ DLLEXPORT int socketOpen(WolframLibraryData libData, mint Argc, MArgument *Args,
 
     iResult = getaddrinfo(host, port, &hints, &address);
     if (iResult != 0) {
+        printf("[socketOpen->ERROR]\n\tgetaddrinfo() for port = %d returns error = %d\n\n", port, GETSOCKETERRNO()); 
         return LIBRARY_FUNCTION_ERROR;
     }
 
     listenSocket = socket(address->ai_family, address->ai_socktype, address->ai_protocol);
     if (!ISVALIDSOCKET(listenSocket)) {
+        printf("[socketOpen->ERROR]\n\tsocket() for port = %d returns error = %d\n\n", port, GETSOCKETERRNO()); 
         freeaddrinfo(address);
         return LIBRARY_FUNCTION_ERROR;
     }
 
-    iResult = (listenSocket, IPPROTO_TCP, TCP_NODELAY, (const char*)&iMode, sizeof(iMode)); 
+    int iModeNoDelay = 0; 
+
+    iResult = setsockopt(listenSocket, IPPROTO_TCP, TCP_NODELAY, (const char*)&iModeNoDelay, sizeof(iModeNoDelay)); 
     if (iResult == SOCKET_ERROR) {
+        printf("[socketOpen->ERROR]\n\tsetsockopt(TCP_NODELAY) for port = %d returns error = %d\n\n", port, GETSOCKETERRNO()); 
         CLOSESOCKET(listenSocket);
         return LIBRARY_FUNCTION_ERROR;
     }
 
-    iResult = (listenSocket, SOL_SOCKET, SO_KEEPALIVE, (const char*)&iMode, sizeof(iMode)); 
+    iResult = setsockopt(listenSocket, SOL_SOCKET, SO_KEEPALIVE, (const char*)&iMode, sizeof(iMode)); 
     if (iResult == SOCKET_ERROR) {
+        printf("[socketOpen->ERROR]\n\tsetsockopt(SO_KEEPALIVE) for port = %d returns error = %d\n\n", port, GETSOCKETERRNO()); 
         CLOSESOCKET(listenSocket);
         return LIBRARY_FUNCTION_ERROR;
     }
 
-    iResult = (listenSocket, SOL_SOCKET, SO_RCVBUF, (const char*)&buffSize, sizeof(buffSize)); 
+    iResult = setsockopt(listenSocket, SOL_SOCKET, SO_RCVBUF, (const char*)&buffSize, sizeof(buffSize)); 
     if (iResult == SOCKET_ERROR) {
+        printf("[socketOpen->ERROR]\n\tsetsockopt(SO_RCVBUF) for port = %d returns error = %d\n\n", port, GETSOCKETERRNO()); 
         CLOSESOCKET(listenSocket);
         return LIBRARY_FUNCTION_ERROR;
     }
 
-    iResult = (listenSocket, SOL_SOCKET, SO_SNDBUF, (const char*)&buffSize, sizeof(buffSize)); 
+    iResult = setsockopt(listenSocket, SOL_SOCKET, SO_SNDBUF, (const char*)&buffSize, sizeof(buffSize)); 
     if (iResult == SOCKET_ERROR) {
+        printf("[socketOpen->ERROR]\n\tsetsockopt(SO_SNDBUF) for port = %d returns error = %d\n\n", port, GETSOCKETERRNO()); 
         CLOSESOCKET(listenSocket);
         return LIBRARY_FUNCTION_ERROR;
     }
 
     iResult = bind(listenSocket, address->ai_addr, (int)address->ai_addrlen);
     if (iResult == SOCKET_ERROR) {
+        printf("[socketOpen->ERROR]\n\tbind() for port = %d returns error = %d\n\n", port, GETSOCKETERRNO());
         CLOSESOCKET(listenSocket);
         return LIBRARY_FUNCTION_ERROR;
     }
 
     iResult = listen(listenSocket, SOMAXCONN);
     if (iResult == SOCKET_ERROR) {
+        printf("[socketOpen->ERROR]\n\tblisten() for port = %d returns error = %d\n\n", port, GETSOCKETERRNO());
         CLOSESOCKET(listenSocket);
         return LIBRARY_FUNCTION_ERROR;
     }
@@ -262,16 +272,18 @@ DLLEXPORT int socketOpen(WolframLibraryData libData, mint Argc, MArgument *Args,
     #ifdef _WIN32 
     iResult = ioctlsocket(listenSocket, FIONBIO, &iMode); 
     #else
-    iResult = fcntl(listenSocket, O_NONBLOCK, &iMode); 
+    int flags = fcntl(listenSocket, F_GETFL, 0); 
+    flags |= O_NONBLOCK;
+    flags |= O_ASYNC; 
+    iResult = fcntl(listenSocket, F_SETFL, flags, &iMode); 
     #endif
-
-    //printf("[socketOpen]\n\tid: %d\n\thost: %s\n\tport: %s\n\n", listenSocket, host, port);
-
-    //if (iResult != NO_ERROR) {
-    //    printf("[socketOpen]\n\terror!\n\n");
-    //}
+    if (iResult != NO_ERROR) {
+        printf("[socketOpen->ERROR]\n\tioctlsocket(FIONBIO) for port = %d returns error = %d\n\n", port, GETSOCKETERRNO());
+    }
 
     freeaddrinfo(address);
+    libData->UTF8String_disown(host); 
+    libData->UTF8String_disown(port); 
 
     MArgument_setInteger(Res, listenSocket);
     return LIBRARY_NO_ERROR; 

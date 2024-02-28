@@ -103,7 +103,7 @@ CSocketObject /: SocketListen[socket: CSocketObject[socketId_Integer], handler_,
 With[{messager = OptionValue["SocketEventsHandler"]},
 	Module[{task}, 
 		task = createAsynchronousTask[socketId, 
-			(With[{p = toPacket[##]}, Echo[p /. {a_Association :> handler[a], b_List :> (messager@@b)}] ] ) &
+			(With[{p = toPacket[##]}, p /. {a_Association :> handler[a], b_List :> (messager@@b)} ] ) &
 		, "BufferSize" -> OptionValue["BufferSize"] ]; 
 
 		CSocketListener[<|
