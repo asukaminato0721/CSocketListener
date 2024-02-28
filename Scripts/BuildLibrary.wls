@@ -3,7 +3,7 @@
 
 Get["CCompilerDriver`"]; 
 
-$libraryLinkVersion := $libraryLinkVersion = If[(StringCases[ToString[#], "LibraryVersionInformation"] // Flatten // Length) > 0, 6, #] &@
+$libraryLinkVersion := $libraryLinkVersion = If[(StringCases[ToString[#], "LibraryVersionInformation"] // Flatten // Length) > 0, 7, #] &@
 LibraryVersionInformation[FindLibrary["demo"]]["WolframLibraryVersion"]; 
 
 

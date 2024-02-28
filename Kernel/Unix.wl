@@ -19,7 +19,7 @@ Begin["`Private`"]
 (*Internal*)
 
 
-$linkVersion  := $linkVersion = If[(StringCases[ToString[#], "LibraryVersionInformation"] // Flatten // Length) > 0, 6, #] &@
+$linkVersion  := $linkVersion = If[(StringCases[ToString[#], "LibraryVersionInformation"] // Flatten // Length) > 0, "JustTryToFind", #] &@
 LibraryVersionInformation[FindLibrary["demo"]]["WolframLibraryVersion"]; 
 $directory = DirectoryName[$InputFileName, 2];
 
@@ -36,7 +36,36 @@ $buildLibrary := Get[FileNameJoin[{$directory, "Scripts", "BuildLibrary.wls"}] ]
 Echo["CSockets >> Unix >> " <> $SystemID];
 Echo["CSockets >> Unix >> Loading library... LLink "<>ToString[$linkVersion] ];
 
-If[!FileExistsQ[$libFile], 
+If[$linkVersion === "JustTryToFind",
+  $linkVersion = 7;
+  If[!FileExistsQ[$libFile], 
+    Echo["CSockets >> Unix >> Not found! LLink "<>ToString[$linkVersion] ];
+    $buildLibrary;
+
+            If[FailureQ[
+	            runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
+	        ],
+                Echo["CSockets >> Unix >> Loading process failed. LLink "<>ToString[$linkVersion] ];
+                Exit[-1];
+            ];
+        ,
+            If[FailureQ[
+	            runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
+	        ],
+                Echo["CSockets >> Unix >> It did not work! LLink "<>ToString[$linkVersion] ];
+                $linkVersion = 6;
+                Echo["CSockets >> Unix >> Trying LLink "<>ToString[$linkVersion] ];
+                
+                If[FailureQ[
+	                runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
+	            ],
+                    Echo["CSockets >> Unix >> Loading process failed. LLink "<>ToString[$linkVersion] ];
+                    Exit[-1];
+                ];                
+            ];
+  ];
+,
+  If[!FileExistsQ[$libFile], 
     Echo["CSockets >> Unix >> Not found! LLink "<>ToString[$linkVersion] ];
     $buildLibrary;
 
@@ -53,7 +82,9 @@ If[!FileExistsQ[$libFile],
                 Echo["CSockets >> Unix >> It did not work! LLink "<>ToString[$linkVersion] ];
                 Exit[-1];
             ];
+  ];
 ];
+
 
 Echo["CSockets >> Unix >> Succesfully loaded! LLink "<>ToString[$linkVersion] ];
 
