@@ -44,21 +44,21 @@ If[$linkVersion === "JustTryToFind",
     $buildLibrary;
 
             If[FailureQ[
-	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
+	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer] 
 	        ],
                 Echo["CSockets >> Win >> Loading process failed. LLink "<>ToString[$linkVersion] ];
                 Exit[-1];
             ];
         ,
             If[FailureQ[
-	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
+	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer] 
 	        ],
                 Echo["CSockets >> Win >> It did not work! LLink "<>ToString[$linkVersion] ];
                 $linkVersion = 6;
                 Echo["CSockets >> Win >> Trying LLink "<>ToString[$linkVersion] ];
                 
                 If[FailureQ[
-	                socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
+	                socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer] 
 	            ],
                     Echo["CSockets >> Win >> Loading process failed. LLink "<>ToString[$linkVersion] ];
                     Exit[-1];
@@ -71,14 +71,14 @@ If[$linkVersion === "JustTryToFind",
     $buildLibrary;
 
             If[FailureQ[
-	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
+	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer] 
 	        ],
                 Echo["CSockets >> win >> Loading process failed. LLink "<>ToString[$linkVersion] ];
                 Exit[-1];
             ];
         ,
             If[FailureQ[
-	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
+	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer] 
 	        ],
                 Echo["CSockets >> Win >> It did not work! LLink "<>ToString[$linkVersion] ];
                 Exit[-1];
