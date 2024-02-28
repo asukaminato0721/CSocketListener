@@ -3,8 +3,11 @@
 
 Get["CCompilerDriver`"]; 
 
+$libraryLinkVersion := $libraryLinkVersion = If[(StringCases[ToString[#], "LibraryVersionInformation"] // Flatten // Length) > 0, 6, #] &@
+LibraryVersionInformation[FindLibrary["demo"]]["WolframLibraryVersion"]; 
 
-Block[{$directory, $libSrc, $libDir, $linkerOptions, $liblink = 7}, 
+
+Block[{$directory, $libSrc, $libDir, $linkerOptions, $liblink = $libraryLinkVersion}, 
 	$directory = DirectoryName[If[$InputFileName == "", 
 		NotebookFileName[], 
 		$InputFileName

@@ -18,7 +18,9 @@ Begin["`Private`"]
 (* ::Section:: *)
 (*Internal*)
 
-$linkVersion = 7;
+
+$linkVersion  := $linkVersion = If[(StringCases[ToString[#], "LibraryVersionInformation"] // Flatten // Length) > 0, 6, #] &@
+LibraryVersionInformation[FindLibrary["demo"]]["WolframLibraryVersion"]; 
 $directory = DirectoryName[$InputFileName, 2];
 
 $libFile := FileNameJoin[{
@@ -34,44 +36,9 @@ $buildLibrary := Get[FileNameJoin[{$directory, "Scripts", "BuildLibrary.wls"}] ]
 Echo["CSockets >> Unix >> " <> $SystemID];
 Echo["CSockets >> Unix >> Loading library... LLink "<>ToString[$linkVersion] ];
 
-(* Trials and errors with different LLink versions and compilation processes *)
-(* Fuck youself WRI! *)
-
 If[!FileExistsQ[$libFile], 
     Echo["CSockets >> Unix >> Not found! LLink "<>ToString[$linkVersion] ];
-    $linkVersion--;
-
-    If[!FileExistsQ[$libFile], 
-        Echo["CSockets >> Unix >> Not found! LLink "<>ToString[$linkVersion] ];
-        $linkVersion++;
-        $buildLibrary;
-
-        If[!FileExistsQ[$libFile],
-            Echo["CSockets >> Unix >> File does not exists. Sorry, we can't run this thing. LLink "<>ToString[$linkVersion] ];
-            Exit[-1];
-        ];
-    ,
-    
-        If[FailureQ[
-		    runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
-	    ],
-            Echo["CSockets >> Unix >> Loading process failed. Sorry, we can't do much about it :("];
-            Exit[-1];
-        ];
-    
-    ];
-
-,
-    If[FailureQ[
-	    runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
-	],
-        Echo["CSockets >> Unix >> Wrong LLink version! Trying another... LLink "<>ToString[$linkVersion]<>" Trying another..."];
-        
-        $linkVersion--;
-        If[!FileExistsQ[$libFile], 
-            Echo["CSockets >> Unix >> Not found! LLink "<>ToString[$linkVersion] ];
-            $linkVersion++;
-            $buildLibrary;
+    $buildLibrary;
 
             If[FailureQ[
 	            runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
@@ -86,9 +53,6 @@ If[!FileExistsQ[$libFile],
                 Echo["CSockets >> Unix >> It did not work! LLink "<>ToString[$linkVersion] ];
                 Exit[-1];
             ];
-        ]
-    ];
-    
 ];
 
 Echo["CSockets >> Unix >> Succesfully loaded! LLink "<>ToString[$linkVersion] ];
