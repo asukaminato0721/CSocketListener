@@ -34,50 +34,56 @@ $buildLibrary := Get[FileNameJoin[{$directory, "Scripts", "BuildLibrary.wls"}] ]
 Echo["CSockets >> Windows >> " <> $SystemID];
 Echo["CSockets >> Windows >> Loading library... LLink "<>ToString[$linkVersion] ];
 
+
+
+
 If[$linkVersion === "JustTryToFind",
   $linkVersion = 7;
-        If[!FileExistsQ[$libFile], 
-            Echo["CSockets >> Windows >> Not found! LLink "<>ToString[$linkVersion] ];
-            $buildLibrary;
+  If[!FileExistsQ[$libFile], 
+    Echo["CSockets >> Win >> Not found! LLink "<>ToString[$linkVersion] ];
+    $buildLibrary;
 
             If[FailureQ[
 	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
 	        ],
-                Echo["CSockets >> Windows >> Loading process failed. LLink "<>ToString[$linkVersion] ];
+                Echo["CSockets >> Win >> Loading process failed. LLink "<>ToString[$linkVersion] ];
                 Exit[-1];
             ];
         ,
             If[FailureQ[
 	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
 	        ],
-                Echo["CSockets >> Windows >> It did not work! LLink "<>ToString[$linkVersion] ];
-                Exit[-1];
+                Echo["CSockets >> Win >> It did not work! LLink "<>ToString[$linkVersion] ];
+                $linkVersion = 6;
+                Echo["CSockets >> Win >> Trying LLink "<>ToString[$linkVersion] ];
+                
+                If[FailureQ[
+	                socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
+	            ],
+                    Echo["CSockets >> Win >> Loading process failed. LLink "<>ToString[$linkVersion] ];
+                    Exit[-1];
+                ];                
             ];
-        ]
+  ];
 ,
-        If[!FileExistsQ[$libFile], 
-            Echo["CSockets >> Windows >> Not found! LLink "<>ToString[$linkVersion] ];
-            $buildLibrary;
+  If[!FileExistsQ[$libFile], 
+    Echo["CSockets >> Win >> Not found! LLink "<>ToString[$linkVersion] ];
+    $buildLibrary;
 
             If[FailureQ[
 	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
 	        ],
-                Echo["CSockets >> Windows >> Loading process failed. LLink "<>ToString[$linkVersion] ];
+                Echo["CSockets >> win >> Loading process failed. LLink "<>ToString[$linkVersion] ];
                 Exit[-1];
             ];
         ,
-
-            Echo["CSockets >> Windows >> It did not work! LLink "<>ToString[$linkVersion] ];
-            $linkVersion = 6;
-            Echo["CSockets >> Windows >> Trying LLink "<>ToString[$linkVersion] ]; 
-
             If[FailureQ[
 	            socketOpen = LibraryFunctionLoad[$libFile, "socketOpen", {String, String}, Integer]; 
 	        ],
-                Echo["CSockets >> Windows >> It did not work! LLink "<>ToString[$linkVersion] ];
+                Echo["CSockets >> Win >> It did not work! LLink "<>ToString[$linkVersion] ];
                 Exit[-1];
             ];
-        ]
+  ];
 ];
 
 Echo["CSockets >> Windows >> Succesfully loaded! LLink "<>ToString[$linkVersion] ];
