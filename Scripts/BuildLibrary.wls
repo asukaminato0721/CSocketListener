@@ -33,7 +33,7 @@ Block[{$directory, $libSrc, $libDir, $linkerOptions, $liblink = $libraryLinkVers
 	CreateLibrary[$libSrc, "csockets", 
 		"TargetDirectory" -> $libDir, 
 		"Debug" -> True, 
-		"Libraries" -> If[$OperatingSystem === "Windows", {"ws2_32"}, {}],
-		"IncludeDirectories" ->  If[$OperatingSystem === "Windows", {}, {}]
+		"Libraries" -> If[$OperatingSystem === "Windows", {"ws2_32"}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/lib/libuv.a"}, {}] ],
+		"IncludeDirectories" ->  If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/include"}, {}] ]
 	]
 ]; 
