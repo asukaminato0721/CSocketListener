@@ -18,7 +18,7 @@ uv_loop_t *loop;
 int uv_loop_running = -1;
 
 
-#define MAXCLIENTS 2048
+#define MAXCLIENTS 5000
 
 struct ooc
 {
@@ -311,9 +311,21 @@ void echo_read(uv_stream_t *client, ssize_t nread, const uv_buf_t *buf) {
     free(buf->base);
 }
 
+bool _force_reuse = false;
+
 void findEmptySocketSlot() {
+    if (!_force_reuse) {
+        nsockets++;
+        if (nsockets == MAXCLIENTS) {
+            printf("sorry i will probably die now. please, blame krikus.ms@gmail.com\n");
+            nsockets = 0;
+            _force_reuse = true;
+        }
+        return;
+    }
     if (sockets[nsockets].state == -1) return;
     nsockets++;
+    
     if (nsockets == MAXCLIENTS) nsockets = 0;
 
     while(true) {
