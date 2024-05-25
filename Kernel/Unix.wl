@@ -99,7 +99,7 @@ createAsynchronousTask[socketId_, handler_, OptionsPattern[] ] := With[{},
  
     With[{sid = createServer @ socketId},
         router[_,  event_String, {sid, cid_, payload_}] := (handler[sid, event, {sid, cid, payload}]);
-        router[_, "NewClient", {sid, cid_, port_}] := (Echo["New client on port "<>ToString[port] ]; socketsInfo[cid] = port);
+        router[_, "NewClient", {sid, cid_, port_}] := ( socketsInfo[cid] = port);
     ];   
 
     (* multiple async tasks are not supported! just return server's id *)
