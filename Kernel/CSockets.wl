@@ -72,17 +72,17 @@ CSocketObject[Apply[socketConnect, StringSplit[address, ":"]]];
 
 
 CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_ByteArray] := With[{result = socketBinaryWrite[socketId, data, Length[data], $bufferSize]},
-	If[result < 0, Echo[StringTemplate["CSockets >> writting error >> error ``"][result] ]; $Failed, result]
+	If[result < 0,  $Failed, result]
 ]
 
 
 CSocketObject /: BinaryWrite[CSocketObject[socketId_Integer], data_List] := With[{result = socketBinaryWrite[socketId, ByteArray[data], Length[data], $bufferSize]},
-	If[result < 0, Echo[StringTemplate["CSockets >> writting bytes >> error ``"][result] ]; $Failed, result]
+	If[result < 0,  $Failed, result]
 ]
 
 
 CSocketObject /: WriteString[CSocketObject[socketId_Integer], data_String] := With[{result = socketWriteString[socketId, data, StringLength[data], $bufferSize]},
-	If[result < 0, Echo[StringTemplate["CSockets >> writting string >> error ``"][result] ]; $Failed, result]
+	If[result < 0,  $Failed, result]
 ]
 
 
