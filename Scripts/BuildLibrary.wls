@@ -33,7 +33,8 @@ Block[{$directory, $libSrc, $libDir, $linkerOptions, $liblink = $libraryLinkVers
 	CreateLibrary[$libSrc, "csockets", 
 		"TargetDirectory" -> $libDir, 
 		"Debug" -> True, 
-		"Libraries" -> If[$OperatingSystem === "Windows", {"ws2_32"}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/lib/libuv.a"}, {"uv"}] ],
-		"IncludeDirectories" ->  If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/include"}, {"/home/kirill/Desktop/Projects/libuv/include"}] ]
+		"CompileOptions"->{"-Wl,-rpath,'$ORIGIN'"},
+		"Libraries" -> If[$OperatingSystem === "Windows", {"ws2_32"}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/lib/libuv.a"}, {"/home/kirill/Desktop/CSocketListener/LibraryResources/7/Linux-x86-64/libuv.so"}] ],
+		"IncludeDirectories" ->  If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/include"}, {"/home/kirill/Desktop/libuv/include"}] ]
 	]
 ]; 
