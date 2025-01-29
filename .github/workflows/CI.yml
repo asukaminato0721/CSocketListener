@@ -1,0 +1,23 @@
+name: Wolfram Engine Test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm # Use an ARM64 runner
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: steps
+        run: |
+            set -eux -o pipefail
+            chmod +x ./.github/workflows/install.sh
+            WE_MODE=install bash ./.github/workflows/install.sh
+            sudo apt install libuv1-dev -y
+            sed -i "s@/home/kirill/Downloads/libuv-1.46.0/build/libuv.so@/usr/lib/aarch64-linux-gnu/libuv.so@g" Scripts/BuildLibrary.wls
+            sed -i "s@/home/kirill/Downloads/libuv-1.46.0/includes@/usr/include@g" Scripts/BuildLibrary.wls
+            # I can't figure out how to activate this in ci. So this step will fail.
+            /opt/Wolfram/WolframEngine/14.1/SystemFiles/Kernel/Binaries/Linux-ARM64/wolframscript -f Scripts/BuildLibrary.wls
+            # after is simple. just release with action
