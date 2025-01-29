@@ -10,15 +10,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-    
-      - name: Install Wolfram Engine
+
+      - name: install wolfram engine
+        shell: bash
         run: |
-          # Your custom install script or docker steps will go here
-          # Example using modified script from method 1
-          git clone https://github.com/your-diary/Install-Wolfram-Engine-on-Arch-Linux-ARM.git
-          cd Install-Wolfram-Engine-on-Arch-Linux-ARM
-          #Make changes to install_wolfram.sh as necessary
-          WE_MODE=install bash install_wolfram.sh
+          chmod +x ./.github/workflows/install.sh
+          ./.github/workflows/install.sh
     
       - name: Debugging with tmate
         uses: mxschmitt/action-tmate@v3.19
