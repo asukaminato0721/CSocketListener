@@ -10,12 +10,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: install wolfram engine
-        shell: bash
-        run: |
-          chmod +x ./.github/workflows/install.sh
-          ./.github/workflows/install.sh
     
       - name: Debugging with tmate
         uses: mxschmitt/action-tmate@v3.19
