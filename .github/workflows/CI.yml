@@ -18,6 +18,8 @@ jobs:
             sudo apt install libuv1-dev -y
             sed -i "s@/home/kirill/Downloads/libuv-1.46.0/build/libuv.so@/usr/lib/aarch64-linux-gnu/libuv.so@g" Scripts/BuildLibrary.wls
             sed -i "s@/home/kirill/Downloads/libuv-1.46.0/includes@/usr/include@g" Scripts/BuildLibrary.wls
+            sudo echo > "/opt/Wolfram/WolframEngine/14.1/Configuration/Licensing/mathpass" # clear it
+            
       - name: Debugging with tmate
         uses: mxschmitt/action-tmate@v3.19
       - name: Build
@@ -25,3 +27,9 @@ jobs:
             # I can't figure out how to activate this in ci. So this step will fail.
             /opt/Wolfram/WolframEngine/14.1/SystemFiles/Kernel/Binaries/Linux-ARM64/wolframscript -f Scripts/BuildLibrary.wls
             # after is simple. just release with action
+      - name: upload
+        uses: actions/upload-artifact@v4
+        with:          
+              # A file, directory or wildcard pattern that describes what to upload
+              # Required.
+              path: LibraryResources/
