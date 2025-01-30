@@ -1,61 +1,40 @@
 #!/usr/bin/env wolframscript
 (* ::Package:: *)
 
-LINUXLIVUVPATH = "/home/kirill/Downloads/libuv-1.46.0/build/libuv.so"
-LINUXLIBUVINCLUDE = "/home/kirill/Downloads/libuv-1.46.0/includes"
-
-MACOSXLIBUVPATH = "/opt/homebrew/lib/libuv.a"
-
-(*MACOSXLIBUVPATH = "/usr/local/lib/libuv.a"*)
-
-MACOSXLIBUVINCLUDE = "/opt/homebrew/include"
-
-(*MACOSXLIBUVINCLUDE = "/usr/local/include"*)
-
 Get["CCompilerDriver`"]; 
 
-Echo["CScockets >> version WL >> "<>$Version];
-(*
-$CCompiler={"Compiler"->GenericCCompiler,
- "CompilerInstallation"->"C:\\mingw64\\bin",
- "CompilerName"->"gcc.exe",
- "ShellOutputFunction"->Print}
+$libraryLinkVersion := $libraryLinkVersion = If[(StringCases[ToString[#], "LibraryVersionInformation"] // Flatten // Length) > 0, 7, #] &@
+LibraryVersionInformation[FindLibrary["demo"]]["WolframLibraryVersion"]; 
 
- *)
 
-OSIncludes = If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVINCLUDE}, {LINUXLIBUVINCLUDE}]];
-
-OSLibs = If[$OperatingSystem === "Windows", {"ws2_32"}, If[$OperatingSystem === "MacOSX", {MACOSXLIBUVPATH}, {LINUXLIVUVPATH}]];
-OSPath = If[$OperatingSystem === "Windows", "Windows", "Unix"];
-
-OSSrc = If[$OperatingSystem === "Windows", "wsockets.c", "csockets.c"];
-
-Block[{$directory, $libSrc, $libDir}, 
+Block[{$directory, $libSrc, $libDir, $linkerOptions, $liblink = $libraryLinkVersion}, 
 	$directory = DirectoryName[If[$InputFileName == "", 
 		NotebookFileName[], 
 		$InputFileName
 	], 2]; 
 
-
 	$libSrc = File[FileNameJoin[{
 		$directory, 
 		"Source", 
-		OSSrc
-	}]]; 
+		If[$OperatingSystem === "Windows", "wsockets.c", "usockets.c"]
+	}] ]; 
 
 
 	$libDir = FileNameJoin[{
 		$directory, 
 		"LibraryResources", 
-		"7",
+		ToString[$liblink],
 		$SystemID
 	}]; 
 
 
 	If[!FileExistsQ[$libDir], CreateDirectory[]];
 
-
-	Get["CCompilerDriver`"]; 
-
-	CreateLibrary[$libSrc, "csockets" , "TargetDirectory" -> $libDir, "Debug"->True, "Libraries"->OSLibs, "IncludeDirectories"->OSIncludes]
+	CreateLibrary[$libSrc, "csockets", 
+		"TargetDirectory" -> $libDir, 
+		"Debug" -> True, 
+		"CompileOptions"->{"-Wl,-rpath,'$ORIGIN'"},
+		"Libraries" -> If[$OperatingSystem === "Windows", {"ws2_32"}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/lib/libuv.a"}, {"/home/kirill/Desktop/CSocketListener/LibraryResources/7/Linux-x86-64/libuv.so"}] ],
+		"IncludeDirectories" ->  If[$OperatingSystem === "Windows", {}, If[$OperatingSystem === "MacOSX", {"/opt/homebrew/include"}, {"/home/kirill/Desktop/libuv/include"}] ]
+	]
 ]; 
