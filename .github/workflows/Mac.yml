@@ -36,10 +36,8 @@ jobs:
         run: |
           export PATH="${{ env.WOLFRAMENGINE_EXECUTABLES_DIRECTORY }}:$PATH"
 
-          wolframscript -debug -verbose -script ./Scripts/BuildLibrary.wls / -lluv
+          wolframscript -debug -verbose -script ./Scripts/BuildLibrary.wls /System/Volumes/Data/opt/homebrew/include/ /System/Volumes/Data/opt/homebrew/lib/libuv.a
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
 
       - name: Commit files
         run: |
@@ -89,10 +87,7 @@ jobs:
         run: |
           export PATH="${{ env.WOLFRAMENGINE_EXECUTABLES_DIRECTORY }}:$PATH"
 
-          wolframscript -debug -verbose -script ./Scripts/BuildLibrary.wls / -lluv
-
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+          wolframscript -debug -verbose -script ./Scripts/BuildLibrary.wls /usr/local/include/ /usr/local/lib/libuv.a
 
       - name: Commit files
         run: |
