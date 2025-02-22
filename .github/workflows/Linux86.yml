@@ -6,7 +6,6 @@ jobs:
     container:
       image: wolframresearch/wolframengine:14.2
       options: --user root
-      working-directory: /github/workspace
     env:
       WOLFRAM_SYSTEM_ID: Linux-x86-64-v8
     steps:
@@ -25,17 +24,19 @@ jobs:
       - name: Debug Workspace
         run: |
           echo "Current directory: $(pwd)"
-          ls -la
+          echo "GitHub workspace: $GITHUB_WORKSPACE"
+          ls -la $GITHUB_WORKSPACE
 
       - name: Compile function
         env:
           WOLFRAMSCRIPT_ENTITLEMENTID: ${{ secrets.WOLFRAM_LICENSE_ENTITLEMENT_ID }}
         run: |
+          cd $GITHUB_WORKSPACE  # Make sure we are in the repo
           wolframscript -script ./Scripts/BuildLibrary.wls /usr/include/ /usr/lib/x86_64-linux-gnu/libuv.so
 
       - name: Commit files
         run: |
-          cd $GITHUB_WORKSPACE  # Ensure we are in the right directory
+          cd $GITHUB_WORKSPACE  # Ensure we are inside the Git repo
           git config pull.rebase true
           git fetch        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -55,7 +56,7 @@ jobs:
     container:
       image: wolframresearch/wolframengine:14.1
       options: --user root
-      working-directory: /github/workspace
+
     env:
       WOLFRAM_SYSTEM_ID: Linux-x86-64-v7
     steps:
@@ -74,17 +75,19 @@ jobs:
       - name: Debug Workspace
         run: |
           echo "Current directory: $(pwd)"
-          ls -la
+          echo "GitHub workspace: $GITHUB_WORKSPACE"
+          ls -la $GITHUB_WORKSPACE
 
       - name: Compile function
         env:
           WOLFRAMSCRIPT_ENTITLEMENTID: ${{ secrets.WOLFRAM_LICENSE_ENTITLEMENT_ID }}
         run: |
+          cd $GITHUB_WORKSPACE  # Make sure we are in the repo
           wolframscript -script ./Scripts/BuildLibrary.wls /usr/include/ /usr/lib/x86_64-linux-gnu/libuv.so
 
       - name: Commit files
         run: |
-          cd $GITHUB_WORKSPACE  # Ensure we are in the right directory
+          cd $GITHUB_WORKSPACE  # Ensure we are inside the Git repo
           git config pull.rebase true
           git fetch        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
