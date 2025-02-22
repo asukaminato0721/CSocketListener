@@ -7,36 +7,34 @@ jobs:
       image: wolframresearch/wolframengine:14.2
       options: --user root
     env:
-      WOLFRAM_SYSTEM_ID: Linux-x86-64-v8
+      WOLFRAM_SYSTEM_ID: Linux-x86-64-v7
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GH_TOKEN }}        
-
       - name: Install build tools
         run: |
           apt-get -y update
           apt-get -y install build-essential
           apt-get -y install libuv1-dev
-          apt-get -y install git
 
-      - name: Debug Workspace
+      - name: Install Git in container
         run: |
-          echo "Current directory: $(pwd)"
-          echo "GitHub workspace: $GITHUB_WORKSPACE"
-          ls -la $GITHUB_WORKSPACE
+          apk update
+          apk add git
+          # one time fix to avoid permission problems later on
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # Checks-out the repository under $GITHUB_WORKSPACE.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0         
+          token: ${{ secrets.GH_TOKEN }}           
 
       - name: Compile function
         env:
           WOLFRAMSCRIPT_ENTITLEMENTID: ${{ secrets.WOLFRAM_LICENSE_ENTITLEMENT_ID }}
         run: |
-          cd $GITHUB_WORKSPACE  # Make sure we are in the repo
           wolframscript -script ./Scripts/BuildLibrary.wls /usr/include/ /usr/lib/x86_64-linux-gnu/libuv.so
 
       - name: Commit files
         run: |
-          cd $GITHUB_WORKSPACE  # Ensure we are inside the Git repo
           git config pull.rebase true
           git fetch        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -60,34 +58,32 @@ jobs:
     env:
       WOLFRAM_SYSTEM_ID: Linux-x86-64-v7
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v2
-        with:
-          token: ${{ secrets.GH_TOKEN }}        
-
       - name: Install build tools
         run: |
           apt-get -y update
           apt-get -y install build-essential
           apt-get -y install libuv1-dev
-          apt-get -y install git
 
-      - name: Debug Workspace
+      - name: Install Git in container
         run: |
-          echo "Current directory: $(pwd)"
-          echo "GitHub workspace: $GITHUB_WORKSPACE"
-          ls -la $GITHUB_WORKSPACE
+          apk update
+          apk add git
+          # one time fix to avoid permission problems later on
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      # Checks-out the repository under $GITHUB_WORKSPACE.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0         
+          token: ${{ secrets.GH_TOKEN }}           
 
       - name: Compile function
         env:
           WOLFRAMSCRIPT_ENTITLEMENTID: ${{ secrets.WOLFRAM_LICENSE_ENTITLEMENT_ID }}
         run: |
-          cd $GITHUB_WORKSPACE  # Make sure we are in the repo
           wolframscript -script ./Scripts/BuildLibrary.wls /usr/include/ /usr/lib/x86_64-linux-gnu/libuv.so
 
       - name: Commit files
         run: |
-          cd $GITHUB_WORKSPACE  # Ensure we are inside the Git repo
           git config pull.rebase true
           git fetch        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
