@@ -7,7 +7,7 @@ jobs:
       image: wolframresearch/wolframengine:14.2
       options: --user root
     env:
-      WOLFRAM_SYSTEM_ID: Linux-x86-64-v7
+      WOLFRAM_SYSTEM_ID: Linux-x86-64-v8
     steps:
       - name: Install build tools
         run: |

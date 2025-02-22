@@ -19,7 +19,7 @@ Begin["`Private`"]
 (*Internal*)
 
 
-getLibraryLinkVersion[] := 
+getLibraryLinkVersion[] := getLibraryLinkVersion[] =
 Which[
     $VersionNumber >= 14.1, 
         With[{n = LibraryVersionInformation[FindLibrary["demo"] ]["WolframLibraryVersion"]},
@@ -54,12 +54,17 @@ $libFile := FileNameJoin[{
 Echo["CSockets >> Unix >> " <> $SystemID];
 Echo["CSockets >> Unix >> Loading library... LLink "<>ToString[getLibraryLinkVersion[] ] ];
 
-If[FailureQ[
+While[FailureQ[
     runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
-],
+] && getLibraryLinkVersion[] > 5,
+    getLibraryLinkVersion[] = getLibraryLinkVersion[] - 1;
+    Echo["CSockets >> Unix >> Another attempt to load v"<>ToString[getLibraryLinkVersion[] ] ];
+];
+
+If[getLibraryLinkVersion[] <= 5, 
     Echo["CSockets >> Unix >> Loading process failed. "];
     Exit[-1];
-];
+]
 
 
 Echo["CSockets >> Unix >> Succesfully loaded! LLink "];

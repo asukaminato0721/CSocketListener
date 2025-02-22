@@ -7,7 +7,7 @@ PacletObject[
     "Creator" -> "Kirill Belov",
     "License" -> "MIT",
     "PublisherID" -> "KirillBelov",
-    "Version" -> "1.1.4",
+    "Version" -> "1.1.5",
     "WolframVersion" -> "12+",
     "PrimaryContext" -> "KirillBelov`CSockets`",
     "Extensions" -> {
