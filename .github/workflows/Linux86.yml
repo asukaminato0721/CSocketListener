@@ -17,8 +17,8 @@ jobs:
 
       - name: Install Git in container
         run: |
-          apk update
-          apk add git
+          apt-get -y update
+          apt-get -y install git
           # one time fix to avoid permission problems later on
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
       # Checks-out the repository under $GITHUB_WORKSPACE.
@@ -66,8 +66,8 @@ jobs:
 
       - name: Install Git in container
         run: |
-          apk update
-          apk add git
+          apt-get -y update
+          apt-get -y install git
           # one time fix to avoid permission problems later on
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
       # Checks-out the repository under $GITHUB_WORKSPACE.
