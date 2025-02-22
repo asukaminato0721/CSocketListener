@@ -5,12 +5,12 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: wolframresearch/wolframengine:14.2
-      options: --user root
+      options: --user root -v ${{ github.workspace }}:/repo
     env:
       WOLFRAM_SYSTEM_ID: Linux-x86-64-v8
     steps:
       - name: Check out repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GH_TOKEN }}        
 
@@ -29,12 +29,14 @@ jobs:
 
       - name: Commit files
         run: |
+          cd /repo
           git config pull.rebase true
           git fetch        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add LibraryResources/
           git commit -m "Add binary for ${{ env.WOLFRAM_SYSTEM_ID }}"
+
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
@@ -46,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: wolframresearch/wolframengine:14.1
-      options: --user root
+      options: --user root -v ${{ github.workspace }}:/repo
     env:
       WOLFRAM_SYSTEM_ID: Linux-x86-64-v7
     steps:
@@ -70,12 +72,14 @@ jobs:
 
       - name: Commit files
         run: |
+          cd /repo
           git config pull.rebase true
           git fetch        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add LibraryResources/
           git commit -m "Add binary for ${{ env.WOLFRAM_SYSTEM_ID }}"
+
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
