@@ -62,7 +62,7 @@ If[$OperatingSystem === "Windows",
 	$includes = $ScriptCommandLine[[-2]];
 	$libs = $ScriptCommandLine[[-1]];
 
-	build["usockets", "Libraries" -> {$libs}, "Includes"->{$includes}] 
+	build["usockets", "Libraries" -> {$libs}, "IncludeDirectories"->{$includes}] 
 ];
 
 
