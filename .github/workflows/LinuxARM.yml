@@ -11,7 +11,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}
 
       - name: Install WE
         run: |
