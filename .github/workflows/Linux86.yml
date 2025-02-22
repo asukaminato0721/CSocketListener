@@ -19,6 +19,7 @@ jobs:
           apt-get -y update
           apt-get -y install build-essential
           apt-get -y install libuv1-dev
+          apt-get -y install git
 
       - name: Compile function
         env:
@@ -59,6 +60,7 @@ jobs:
           apt-get -y update
           apt-get -y install build-essential
           apt-get -y install libuv1-dev
+          apt-get -y install git
 
       - name: Compile function
         env:
