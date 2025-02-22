@@ -64,7 +64,8 @@ jobs:
       - name: Commit files
         run: |
           git config pull.rebase true
-          git fetch        
+          git fetch
+          git pull        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add LibraryResources/
@@ -138,7 +139,8 @@ jobs:
       - name: Commit files
         run: |
           git config pull.rebase true
-          git fetch        
+          git fetch
+          git pull        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add LibraryResources/
