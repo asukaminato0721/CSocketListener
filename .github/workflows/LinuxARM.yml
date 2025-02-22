@@ -1,7 +1,7 @@
 name: Compile LLink ARM Linux and UV
 on: workflow_dispatch
 jobs:
-  FunctionCompile-GNULinux-ARM:
+  GNULinux-ARM:
     runs-on: ubuntu-24.04-arm
     env:
       WOLFRAM_SYSTEM_ID: Linux-ARM
@@ -32,7 +32,8 @@ jobs:
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git commit -a -m "Added binaries"
+          git add LibraryResources/
+          git commit -m "Add binary for ${{ env.WOLFRAM_SYSTEM_ID }}"
       - name: Push changes
         uses: ad-m/github-push-action@master
         with:
