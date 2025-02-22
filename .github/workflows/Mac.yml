@@ -41,18 +41,13 @@ jobs:
 
       - name: Commit files
         run: |
-          git config pull.rebase true
-          git fetch
-          git pull        
+          git config pull.rebase false        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add LibraryResources/
           git commit -m "Add binary for ${{ env.WOLFRAM_SYSTEM_ID }}"
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GH_TOKEN }}
-          branch: ${{ github.ref }}
+          git pull
+          git push
 
 
   MacOSX-x64:
@@ -94,15 +89,10 @@ jobs:
 
       - name: Commit files
         run: |
-          git config pull.rebase true
-          git fetch
-          git pull        
+          git config pull.rebase false        
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add LibraryResources/
           git commit -m "Add binary for ${{ env.WOLFRAM_SYSTEM_ID }}"
-      - name: Push changes
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.GH_TOKEN }}
-          branch: ${{ github.ref }}
+          git pull
+          git push
