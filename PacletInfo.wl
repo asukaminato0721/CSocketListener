@@ -27,7 +27,6 @@ PacletObject[
           "KirillBelov`CSockets`CSocketConnect"
         }
       },
-      {"Documentation", "Language" -> "English"},
       {"LibraryLink", "Root" -> "LibraryResources"},
       {
         "Asset",
@@ -36,7 +35,6 @@ PacletObject[
           {"ReadMe", "./README.md"},
           {"Source", "./Source"},
           {"Scripts", "./Scripts"},
-          {"Tests", "./Tests"}
         }
       }
     }

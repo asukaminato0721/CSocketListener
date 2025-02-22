@@ -19,74 +19,50 @@ Begin["`Private`"]
 (*Internal*)
 
 
-$linkVersion  := $linkVersion = If[(StringCases[ToString[#], "LibraryVersionInformation"] // Flatten // Length) > 0, "JustTryToFind", #] &@
-LibraryVersionInformation[FindLibrary["demo"]]["WolframLibraryVersion"]; 
+getLibraryLinkVersion[] := 
+Which[
+    $VersionNumber >= 14.1, 
+        With[{n = LibraryVersionInformation[FindLibrary["demo"] ]["WolframLibraryVersion"]},
+            If[!NumberQ[n], 7, n]
+        ], 
+    $VersionNumber >= 13.1, 
+        7, 
+    $VersionNumber >= 12.1, 
+        6, 
+    $VersionNumber >= 12.0, 
+        5, 
+    $VersionNumber >= 11.2, 
+        4, 
+    $VersionNumber >= 10.0, 
+        3, 
+    $VersionNumber >= 9.0, 
+        2, 
+    True, 
+        1
+]; 
+
 $directory = DirectoryName[$InputFileName, 2];
 
 $libFile := FileNameJoin[{
 	$directory, 
 	"LibraryResources", 
-    $linkVersion // ToString,
-	$SystemID, 
-	"csockets." <> Internal`DynamicLibraryExtension[]
+    $SystemID <> "-v" <> ToString[getLibraryLinkVersion[] ],
+	"usockets." <> Internal`DynamicLibraryExtension[]
 }]; 
 
-$buildLibrary := Get[FileNameJoin[{$directory, "Scripts", "BuildLibrary.wls"}] ]; 
 
 Echo["CSockets >> Unix >> " <> $SystemID];
-Echo["CSockets >> Unix >> Loading library... LLink "<>ToString[$linkVersion] ];
+Echo["CSockets >> Unix >> Loading library... LLink "<>ToString[getLibraryLinkVersion[] ] ];
 
-If[$linkVersion === "JustTryToFind",
-  $linkVersion = 7;
-  If[!FileExistsQ[$libFile], 
-    Echo["CSockets >> Unix >> Not found! LLink "<>ToString[$linkVersion] ];
-    $buildLibrary;
-
-            If[FailureQ[
-	            runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
-	        ],
-                Echo["CSockets >> Unix >> Loading process failed. LLink "<>ToString[$linkVersion] ];
-                Exit[-1];
-            ];
-        ,
-            If[FailureQ[
-	            runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
-	        ],
-                Echo["CSockets >> Unix >> It did not work! LLink "<>ToString[$linkVersion] ];
-                $linkVersion = 6;
-                Echo["CSockets >> Unix >> Trying LLink "<>ToString[$linkVersion] ];
-                
-                If[FailureQ[
-	                runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
-	            ],
-                    Echo["CSockets >> Unix >> Loading process failed. LLink "<>ToString[$linkVersion] ];
-                    Exit[-1];
-                ];                
-            ];
-  ];
-,
-  If[!FileExistsQ[$libFile], 
-    Echo["CSockets >> Unix >> Not found! LLink "<>ToString[$linkVersion] ];
-    $buildLibrary;
-
-            If[FailureQ[
-	            runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
-	        ],
-                Echo["CSockets >> Unix >> Loading process failed. LLink "<>ToString[$linkVersion] ];
-                Exit[-1];
-            ];
-        ,
-            If[FailureQ[
-	            runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
-	        ],
-                Echo["CSockets >> Unix >> It did not work! LLink "<>ToString[$linkVersion] ];
-                Exit[-1];
-            ];
-  ];
+If[FailureQ[
+    runLoop = LibraryFunctionLoad[$libFile, "run_uvloop", {Integer}, Integer]
+],
+    Echo["CSockets >> Unix >> Loading process failed. "];
+    Exit[-1];
 ];
 
 
-Echo["CSockets >> Unix >> Succesfully loaded! LLink "<>ToString[$linkVersion] ];
+Echo["CSockets >> Unix >> Succesfully loaded! LLink "];
 
 
 socketsInfo = <||>;
