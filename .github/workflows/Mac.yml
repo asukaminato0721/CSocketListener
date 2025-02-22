@@ -38,6 +38,9 @@ jobs:
 
           wolframscript -debug -verbose -script ./Scripts/BuildLibrary.wls / -lluv
 
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+
       - name: Commit files
         run: |
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -87,6 +90,9 @@ jobs:
           export PATH="${{ env.WOLFRAMENGINE_EXECUTABLES_DIRECTORY }}:$PATH"
 
           wolframscript -debug -verbose -script ./Scripts/BuildLibrary.wls / -lluv
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
 
       - name: Commit files
         run: |
