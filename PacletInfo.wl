@@ -34,7 +34,7 @@ PacletObject[
           {"License", "./LICENSE"},
           {"ReadMe", "./README.md"},
           {"Source", "./Source"},
-          {"Scripts", "./Scripts"},
+          {"Scripts", "./Scripts"}
         }
       }
     }
